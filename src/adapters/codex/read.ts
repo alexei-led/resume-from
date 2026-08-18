@@ -4,8 +4,10 @@
  * ignored (FR-28, C-4).
  */
 
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { createInterface } from "node:readline";
 import type {
   CanonicalSession,
   CanonicalTurn,
@@ -25,9 +27,9 @@ import {
   CODEX_ITEM_CUSTOM_TOOL_CALL_OUTPUT,
   CODEX_ITEM_FUNCTION_CALL,
   CODEX_ITEM_FUNCTION_CALL_OUTPUT,
-  isNotFoundError,
   KNOWN_ENTRY_TYPES,
   listRolloutFiles,
+  parseEntry,
   parseRolloutText,
   payloadType,
   readSessionMeta,
@@ -117,26 +119,89 @@ export async function readRollout(filePath: string): Promise<CodexRollout> {
 export async function listCodexSessions(home: string): Promise<SessionDescriptor[]> {
   const descriptors: SessionDescriptor[] = [];
   for (const filePath of await listRolloutFiles(sessionsRoot(home))) {
-    let rollout: CodexRollout;
+    let summary: RolloutSummary;
     try {
-      rollout = await scanRollout(filePath);
-    } catch (error) {
-      if (isNotFoundError(error)) continue; // A rollout may disappear during a concurrent cleanup.
-      throw error;
+      summary = await summarizeRollout(filePath);
+    } catch {
+      // A rollout may disappear, be unreadable, or exceed a runtime limit. One bad file must
+      // not prevent discovery of the other sessions in this home.
+      continue;
     }
-    if (rollout.meta === null) continue;
+    if (summary.meta === null) continue;
     descriptors.push({
-      ref: { agent: "codex", home, id: rollout.meta.id },
-      title: rollout.title,
-      startedAt: rollout.startedAt ?? "",
-      updatedAt: rollout.updatedAt ?? rollout.startedAt ?? "",
-      turnCount: rollout.turns.length,
-      repoPath: rollout.meta.cwd !== null && isAbsolute(rollout.meta.cwd) ? rollout.meta.cwd : null,
+      ref: { agent: "codex", home, id: summary.meta.id },
+      title: summary.title,
+      startedAt: summary.startedAt ?? "",
+      updatedAt: summary.updatedAt ?? summary.startedAt ?? "",
+      turnCount: summary.turnCount,
+      repoPath: summary.meta.cwd !== null && isAbsolute(summary.meta.cwd) ? summary.meta.cwd : null,
       filePath,
     });
   }
   descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return descriptors;
+}
+
+interface RolloutSummary {
+  meta: CodexSessionMeta | null;
+  title: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+  turnCount: number;
+}
+
+/** Reads JSONL one entry at a time and retains only picker fields, never the transcript. */
+async function summarizeRollout(filePath: string): Promise<RolloutSummary> {
+  const lines = createInterface({
+    input: createReadStream(filePath),
+    crlfDelay: Number.POSITIVE_INFINITY,
+  });
+  let meta: CodexSessionMeta | null = null;
+  let firstStamp: string | null = null;
+  let lastStamp: string | null = null;
+  let title = "";
+  let turnCount = 0;
+
+  for await (const line of lines) {
+    if (line.trim() === "") continue;
+    const entry = parseEntry(line);
+    if (entry === null) continue;
+    const stamp = toIsoUtc(entry.timestamp);
+    firstStamp ??= stamp;
+    lastStamp = stamp ?? lastStamp;
+    meta ??= readSessionMeta(entry);
+
+    const type = payloadType(entry);
+    if (entry.type === CODEX_ENTRY_COMPACTED) {
+      if (typeof entry.payload.message === "string" && entry.payload.message.trim() !== "")
+        turnCount += 1;
+    } else if (entry.type === CODEX_ENTRY_EVENT_MSG) {
+      if (
+        (type === CODEX_EVENT_USER_MESSAGE || type === CODEX_EVENT_AGENT_MESSAGE) &&
+        typeof entry.payload.message === "string" &&
+        entry.payload.message.trim() !== ""
+      ) {
+        turnCount += 1;
+        if (title === "" && type === CODEX_EVENT_USER_MESSAGE)
+          title = titleOf(entry.payload.message);
+      }
+    } else if (
+      entry.type === CODEX_ENTRY_RESPONSE_ITEM &&
+      (type === CODEX_ITEM_FUNCTION_CALL || type === CODEX_ITEM_CUSTOM_TOOL_CALL) &&
+      typeof entry.payload.name === "string" &&
+      entry.payload.name !== ""
+    ) {
+      turnCount += 1;
+    }
+  }
+
+  return {
+    meta,
+    title,
+    startedAt: toIsoUtc(meta?.timestamp ?? null) ?? firstStamp,
+    updatedAt: lastStamp ?? toIsoUtc(meta?.timestamp ?? null),
+    turnCount,
+  };
 }
 
 export async function loadCodexSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {

@@ -97,6 +97,18 @@ describe("listSessions", () => {
     expect(await adapter.listSessions(home)).toEqual([]);
   });
 
+  it("streams large rollouts and keeps discovering after a malformed file", async () => {
+    const home = tempHome();
+    const goodId = "12121212-1212-4212-8212-121212121212";
+    writeRollout(home, goodId, [metaEntry(goodId), userEvent("kept session")]);
+
+    const badId = "13131313-1313-4313-8313-131313131313";
+    writeRollout(home, badId, [unknownEntry()], undefined, () => "x".repeat(4 * 1024 * 1024));
+
+    const descriptors = await adapter.listSessions(home);
+    expect(descriptors.map((descriptor) => descriptor.ref.id)).toEqual([goodId]);
+  });
+
   it("sorts newest first (FR-14)", async () => {
     const home = tempHome();
     writeRollout(
