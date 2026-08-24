@@ -249,6 +249,15 @@ export function readSessionText(text: string): SessionReadResult {
   let skipped = parsed.entries.length - active.entries.length;
   let repoPath: string | null = null;
   let branch: string | null = null;
+  if (unreadable === null) {
+    // Repository ownership is session metadata, not active-branch metadata. Claude can reset the
+    // active chain after changing cwd, but the session still belongs to the directory it started in.
+    for (const entry of parsed.entries) {
+      if (entry.isSidechain === true) continue;
+      repoPath = asString(entry.cwd);
+      if (repoPath !== null) break;
+    }
+  }
 
   const push = (turn: Omit<CanonicalTurn, "index">): void => {
     // FR-28, security: credentials pasted as message text must not cross to a different vendor.
@@ -258,7 +267,6 @@ export function readSessionText(text: string): SessionReadResult {
   };
 
   for (const entry of active.entries) {
-    if (repoPath === null) repoPath = asString(entry.cwd);
     if (branch === null) branch = asString(entry.gitBranch);
 
     // A sidechain is a separate sub-conversation, not a turn of this session.

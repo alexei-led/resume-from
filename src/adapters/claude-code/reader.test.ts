@@ -109,6 +109,27 @@ describe("T-CC-2 — a session file becomes canonical turns", () => {
 });
 
 describe("Claude active transcript graph", () => {
+  it("keeps the session repository when the active chain starts in a nested cwd", () => {
+    const nested = {
+      ...CTX,
+      cwd: `${REPO}/backend`,
+      gitBranch: "feature/continued-work",
+    };
+    const original = systemEntry(CTX, uuidFor(38), "2026-08-01T09:14:00.000Z", "session start");
+    const active = chainEntries([
+      userEntry(nested, uuidFor(39), "2026-08-01T09:15:00.000Z", "continued request"),
+      assistantTextEntry(nested, uuidFor(40), "2026-08-01T09:15:01.000Z", "continued answer"),
+    ]);
+
+    const read = readSessionText(
+      [original, ...active].map((entry) => JSON.stringify(entry)).join("\n"),
+    );
+
+    expect(read.repoPath).toBe(REPO);
+    expect(read.branch).toBe("feature/continued-work");
+    expect(read.turns.map((turn) => turn.text)).toEqual(["continued request", "continued answer"]);
+  });
+
   it("keeps only the last non-sidechain leaf's ancestry", () => {
     const entries = chainEntries([
       userEntry(CTX, uuidFor(30), "2026-08-01T09:14:02.000Z", "shared request"),
