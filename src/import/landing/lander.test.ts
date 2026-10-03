@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type {
   AgentAdapter,
@@ -973,25 +973,29 @@ describe("behavior", () => {
     if (sent !== undefined) expect(await readFile(sent.absolutePath)).toEqual(sent.bytes);
   });
 
-  it("refuses an adapter that serializes one session to multiple files", async () => {
+  it("commits a multi-file session one file at a time, in the adapter's order", async () => {
+    // Kimi Code's native session is a wire.jsonl plus a state.json. The landing commits
+    // them one at a time through the store — whose one-file atomicity invariant stays
+    // untouched — and the adapter orders them so no prefix is a session the agent would
+    // list (wire first: without state.json the directory is invisible to Kimi Code).
     const log: string[] = [];
 
-    const failure = await failureOf(
-      createSessionLander().land(
-        makePlan(home),
-        createAdapter(log, { fileCount: 2 }),
-        createFsCommitter(log),
-        RUNTIME,
-        IMPORTED_AT,
-        { cwd: "/repo" },
-      ),
+    const result = await createSessionLander().land(
+      makePlan(home),
+      createAdapter(log, { fileCount: 2 }),
+      createFsCommitter(log),
+      RUNTIME,
+      IMPORTED_AT,
+      { cwd: "/repo" },
     );
 
-    expect(failure.stage).toBe("serialize");
-    expect(failure.message).toMatch(/2 files|exactly one file/i);
-    expect(log).not.toContain("validate");
-    expect(log).not.toContain("commit");
-    expect(await snapshot(home)).toEqual([]);
+    expect(result.ref.id).toBe(SESSION_ID);
+    expect(log.filter((entry) => entry === "commit")).toHaveLength(2);
+    // Two files land in one session directory; the snapshot also lists the directory
+    // entries the committer created on the way.
+    const lines = await snapshot(home);
+    expect(lines.filter((line) => line.startsWith("f "))).toHaveLength(2);
+    expect(lines).toContain(`d sessions${sep}${SESSION_ID}`);
   });
 
   it("refuses an adapter that serializes one session to zero files", async () => {

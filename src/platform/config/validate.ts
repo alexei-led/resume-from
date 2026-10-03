@@ -5,7 +5,12 @@ import { resolveHomePath } from "./paths.js";
 
 // Exhaustive by construction: adding an agent (FR-57) fails to compile here until it is listed,
 // instead of silently rejecting the new value at run time.
-const AGENTS: Record<AgentId, true> = { pi: true, codex: true, "claude-code": true };
+const AGENTS: Record<AgentId, true> = {
+  pi: true,
+  codex: true,
+  "claude-code": true,
+  "kimi-code": true,
+};
 const SETTINGS: Record<keyof ImportConfig, true> = {
   extraHomes: true,
   budgetShare: true,

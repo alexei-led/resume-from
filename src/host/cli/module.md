@@ -54,7 +54,7 @@ but the three-step shape is fixed by C-1 and FR-10.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -453,7 +453,7 @@ is spawned and no terminal is required.
   repository named.
 
 **T-CLI-18 — the target agent is never guessed**
-- Scenario: the invocation's `targetAgent` is set to each of the three agents while the environment
+- Scenario: the invocation's `targetAgent` is set to each of the shipped agents while the environment
   is made to suggest a different one.
 - Expected behavior: the request always names the agent the shim stated. No environment variable is
   consulted.

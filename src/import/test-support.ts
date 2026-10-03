@@ -686,7 +686,7 @@ export function recordingRules(inner: TransferRules, seen: TransferPlan[]): Tran
 // A whole world: homes, a repository, and one stub adapter per agent
 // ---------------------------------------------------------------------------
 
-export const AGENTS: AgentId[] = ["pi", "codex", "claude-code"];
+export const AGENTS: AgentId[] = ["pi", "codex", "claude-code", "kimi-code"];
 
 export interface World {
   root: string;

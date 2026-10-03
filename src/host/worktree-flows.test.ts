@@ -110,6 +110,7 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
       "claude-code": join(root, "default Claude profile"),
       codex: join(root, "empty Codex profile"),
       pi: join(root, "empty Pi profile"),
+      "kimi-code": join(root, "empty Kimi Code home"),
     }),
   );
   const hostCwd = join(root, "host creation cwd");

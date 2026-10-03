@@ -10,8 +10,9 @@ This module owns the neutral vocabulary in which a coding session is expressed o
 source agent and before it reaches its target agent. Every rule of requirement sections C to I runs
 on these types and on nothing else.
 
-Without it the tool would need a converter for each of the nine directions of the scope table, and
-FR-6 ("every rule applies to all nine directions") and FR-60 ("an adapter cannot change the rules")
+Without it the tool would need a converter for each direction of the scope table — one per
+ordered pair of agents, sixteen at the four the tool ships — and
+FR-6 ("every rule applies to every direction") and FR-60 ("an adapter cannot change the rules")
 would be unenforceable. With it, an adapter's whole job is to translate in and out of this vocabulary,
 and every rule is written once.
 
@@ -61,7 +62,7 @@ from elsewhere: this module depends on nothing.
 
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;

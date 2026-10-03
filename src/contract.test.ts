@@ -71,8 +71,8 @@ describe("T-ROO-4 — the design tree matches the source tree", () => {
     expect(folders).toEqual(documented);
   });
 
-  it("is 19 modules", () => {
-    expect(MODULES).toHaveLength(19);
+  it("is 20 modules", () => {
+    expect(MODULES).toHaveLength(20);
   });
 
   it.each(MODULES.map((dir) => [modulePath(dir), dir] as const))(
@@ -251,7 +251,7 @@ describe("T-ROO-6 — the coupling assessment is still true", () => {
     expect(Math.max(...MODULE_PATHS.map(depthOf))).toBe(2);
   });
 
-  it("the table is the union of the 19 Integrations sections", () => {
+  it("the table is the union of the Integrations sections", () => {
     const fromDocuments = new Set(
       documented.map((integration) => edgeKey(integration.module, integration.counterpart)),
     );
