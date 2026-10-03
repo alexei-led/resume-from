@@ -381,7 +381,7 @@ test("CLI previews and imports a removed worktree using surviving active-convers
 });
 
 test.each(["missing", "conflicting"] as const)(
-  "CLI and Pi expose %s recorded-directory selection diagnostics without importing",
+  "CLI and Pi expose %s recorded-directory evidence without importing",
   async (evidence) => {
     const scene = await bench("sibling-to-external", "pi");
     if (evidence === "missing") {
@@ -394,13 +394,17 @@ test.each(["missing", "conflicting"] as const)(
     }
     const diagnostic =
       evidence === "missing"
-        ? "has only missing recorded directories"
+        ? "does not belong to this repository and was not listed"
         : "has conflicting repository identity evidence";
     const listed = await scene.run([]);
     expect(listed.stdout.join("\n")).toContain(diagnostic);
     const preview = await scene.run([scene.id]);
     expect(preview.exitCode).toBe(2);
-    expect(preview.stderr.join("\n")).toContain(diagnostic);
+    if (evidence === "conflicting") {
+      // Only a contradiction is narrated in a selection error; a session whose directories
+      // are all gone is a counted non-member like any other.
+      expect(preview.stderr.join("\n")).toContain(diagnostic);
+    }
     const shown: string[] = [];
     const command = createResumeFromCommand({
       windowTokens: scene.target.windowTokens,
@@ -430,7 +434,12 @@ test.each(["missing", "conflicting"] as const)(
     shown.length = 0;
     await command.run(ctx, [scene.id], scene.pipeline);
     expect(shown).toHaveLength(1);
-    expect(shown[0]).toContain(diagnostic);
+    if (evidence === "conflicting") {
+      expect(shown[0]).toContain(diagnostic);
+    } else {
+      // A counted non-member is not a selection diagnostic: the error names the repository.
+      expect(shown[0]).toContain("belongs to this repository");
+    }
     expect(await snapshot(scene.targetHome)).toEqual({});
   },
 );

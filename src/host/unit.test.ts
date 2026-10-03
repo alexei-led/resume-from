@@ -175,7 +175,7 @@ describe("the target profile", () => {
     const pipeline: ImportPipeline = {
       list: (req) => {
         listed.push(req);
-        return Promise.resolve({ rows: [], failures: [] });
+        return Promise.resolve({ rows: [], failures: [], excluded: 0 });
       },
       preview: () => Promise.reject(new Error("not called")),
       commit: () => Promise.reject(new Error("not called")),

@@ -243,12 +243,13 @@ it("lists a session whose start directory is this one when no candidate matches 
   const listing = await discoveryOf(async () => unresolved).list(scope());
 
   expect(listing.rows.map((row) => row.ref.id)).toEqual(["started-here"]);
-  expect(listing.failures.map((failure) => failure.message)).toEqual([
-    "session started-elsewhere has unresolved recorded directories with no matching repository evidence",
-  ]);
+  // Its candidate resolved elsewhere and its start directory is not here: the normal
+  // FR-13 exclusion, counted rather than narrated.
+  expect(listing.failures).toEqual([]);
+  expect(listing.excluded).toBe(1);
 });
 
-it("does not let a start directory override conflicting candidate identity (T-DIS-30)", async () => {
+it("does not let a start directory rescue a foreign candidate without a match (T-DIS-30)", async () => {
   const otherRepo = await makeDir(root, "other-repo");
   const active = await makeDir(otherRepo, "src");
   await writeSession(home, {
@@ -265,7 +266,8 @@ it("does not let a start directory override conflicting candidate identity (T-DI
   })).list(scope());
 
   expect(listing.rows).toEqual([]);
-  expect(listing.failures.map((failure) => failure.message)).toEqual([
-    "session ambiguous has conflicting repository identity evidence; its recorded directories cannot unambiguously belong to this destination",
-  ]);
+  // Without a positively matching candidate there is no contradiction to report: the session
+  // belongs to another repository, and a start directory of this one does not change that.
+  expect(listing.failures).toEqual([]);
+  expect(listing.excluded).toBe(1);
 });

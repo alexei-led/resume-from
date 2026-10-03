@@ -194,12 +194,14 @@ it("allows unresolved exact fallback only without resolved conflicting evidence;
   await session("missing", [missing]);
   const listing = await finder().list(scope(plain));
   expect(listing.rows.map((row) => row.ref.id)).toEqual(["exact"]);
+  // The contradictory session stays diagnostic; the session whose only recorded directory is
+  // gone is a non-member like any other: it cannot be imported either way, so it is counted.
   expect(listing.failures).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ message: expect.stringMatching(/conflict.*conflicting/) }),
-      expect.objectContaining({ message: expect.stringMatching(/missing.*only missing/) }),
     ]),
   );
+  expect(listing.excluded).toBe(1);
   expect((await finder().list(scope(missing))).rows).toEqual([]);
 });
 
@@ -215,9 +217,10 @@ it("does not guess from missing ancestors or admit unrelated repositories, indep
   await session("nested", [nested]);
   const listing = await finder().list(scope(main));
   expect(listing.rows).toEqual([]);
-  expect(
-    listing.failures.find((failure) => failure.message.includes("session removed"))?.message,
-  ).toContain("only missing");
+  // Every recorded directory is gone: unresolvable sessions are counted, not narrated, and
+  // foreign repositories never match by inference.
+  expect(listing.failures).toEqual([]);
+  expect(listing.excluded).toBe(3);
 });
 
 it.each(["timed out", "spawn ENOENT", "EACCES I/O"])(

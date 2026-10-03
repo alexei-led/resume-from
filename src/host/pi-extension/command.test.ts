@@ -52,7 +52,7 @@ function row(agent: AgentId, id: string, home: string): SessionDescriptor {
 }
 
 function listing(rows: SessionDescriptor[], failures: HomeFailure[] = []): Listing {
-  return { rows, failures };
+  return { rows, failures, excluded: 0 };
 }
 
 function report(over: Partial<PreviewReport> = {}): PreviewReport {
@@ -642,6 +642,28 @@ describe("T-PIX-14 — discovery failures are shown", () => {
       expect(shown).toContain(failure.home);
       expect(shown).toContain(failure.message);
     }
+    expect(picked.calls).toHaveLength(1);
+  });
+
+  it("summarizes non-member sessions as one count, not one line each", async () => {
+    const sessions: Listing = {
+      rows: [row("pi", "pi-1", "/Users/me/.pi")],
+      failures: [],
+      excluded: 112,
+    };
+    const pipeline = stubPipeline({ listing: sessions });
+    const picked = stubPicker({ choice: "cancelled", selected: null });
+    const ui = stubUi();
+    const { ctx } = stubContext();
+
+    await createResumeFromCommand(deps({ picker: picked.picker, ui: ui.ui })).run(
+      ctx,
+      [],
+      pipeline.pipeline,
+    );
+
+    const shown = ui.blocks.flat().join("\n");
+    expect(shown).toContain("112 sessions do not belong to this repository and were not listed.");
     expect(picked.calls).toHaveLength(1);
   });
 });

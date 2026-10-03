@@ -43,7 +43,7 @@ export function homeFailure(overrides: Partial<HomeFailure> = {}): HomeFailure {
 }
 
 export function listing(overrides: Partial<Listing> = {}): Listing {
-  return { rows: [], failures: [], ...overrides };
+  return { rows: [], failures: [], excluded: 0, ...overrides };
 }
 
 export function marker(overrides: Partial<ProvenanceMarker> = {}): ProvenanceMarker {

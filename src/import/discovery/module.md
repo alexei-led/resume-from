@@ -315,8 +315,16 @@ interface HomeFailure {
 interface Listing {
   /** Newest first, across every agent and home (FR-14, FR-15). */
   rows: SessionDescriptor[];
-  /** Homes or sessions that were skipped. Reported to the user, never silent. */
+  /** Homes or sessions skipped for a reason the user can act on. Reported, never silent. */
   failures: HomeFailure[];
+  /**
+   * Sessions that do not belong to this repository (FR-13): no candidate matched, with no
+   * contradictory evidence — every surviving candidate resolved elsewhere, every recorded
+   * directory is gone, or both. A deleted worktree of this repository is indistinguishable
+   * from a deleted foreign one, and neither can be imported. Searching a whole home makes
+   * this the normal case, so it is counted, not narrated row by row.
+   */
+  excluded: number;
 }
 ```
 
@@ -421,10 +429,18 @@ Changes that require **only this module** to change:
   override a later conflicting identity. Conflicts exclude the session from every selector and
   produce a diagnostic. A missing primary `repoPath` is recoverable only through a surviving
   `repoPaths` candidate, never by walking to a parent or consulting a worktree registry.
-- **No usable evidence is explained.** Empty candidate arrays, missing-only paths and unresolved
-  candidates without a positive match produce `Listing.failures`. Selection errors include these
-  diagnostics when no row/ID/path can be selected. No worktree-name, prefix, remote, object-store,
-  ancestor or registry heuristics establish membership.
+- **Membership failures are diagnostic; non-membership is a count.** A session produces a
+  `Listing.failures` entry when its evidence is actionable: it records no repository at all, a
+  candidate lookup failed, or a candidate positively matched while another carried a
+  contradictory identity — a conflict without a match is not a contradiction, it is a session
+  of another repository. Everything else is the normal product of searching a whole home
+  (FR-13): sessions whose surviving candidates all resolved elsewhere, and sessions whose
+  recorded directories are all gone — a deleted worktree of this repository is
+  indistinguishable from a deleted foreign one, and neither can be imported. Those are counted
+  in `Listing.excluded`, not narrated row by row, and hosts print the count as one line.
+  Selection errors include the diagnostics when no row/ID/path can be selected.
+  No worktree-name, prefix, remote, object-store, ancestor or registry heuristics establish
+  membership.
 - **The start directory is a last resort, not a candidate.** It is checked only when no recorded
   candidate matched and none conflicted, so it resolves missing evidence and never overrides a match
   or a conflict. It never joins `repoPaths`, so it cannot create a conflict either, and a directory
@@ -620,7 +636,8 @@ Tests use stub adapters over fixture homes and real temporary Git repositories/w
 - Later conflicting identities reject even after a Git or exact-directory match; unresolved
   destinations permit exact fallback only without any resolved candidate identity.
 - Missing-only paths (including removed nested worktrees), independent nested repositories and
-  independent shared-object clones never match by inference. Skipped evidence is explained.
+  independent shared-object clones never match by inference; resolved non-members and
+  unresolvable ones alike are counted, not narrated.
 
 **T-DIS-29 — isolated failures and listing-local caches**
 
@@ -633,6 +650,15 @@ Tests use stub adapters over fixture homes and real temporary Git repositories/w
 
 - Scenario: a session whose recorded candidates are a subdirectory of the destination and whose own
   `startDirectory` is that destination, beside a session whose `startDirectory` is elsewhere.
-- Expected behavior: the first is listed and resolvable while the second stays out with its
-  diagnostic, and a conflicting candidate identity excludes a session even when its `startDirectory`
-  is this directory (issue #5).
+- Expected behavior: the first is listed and resolvable while the second stays out counted in
+  `Listing.excluded`, and a candidate identity that contradicts a positive match excludes a session
+  with a diagnostic even when its `startDirectory` is this directory (issue #5).
+
+**T-DIS-31 — resolved non-members are counted, not narrated**
+
+- Scenario: a home holding one session of this repository beside many sessions whose surviving
+  candidates all resolved in other repositories or other non-repository directories.
+- Expected behavior: only this repository's sessions are rows; the others raise
+  `Listing.excluded` by exactly their number and produce no `Listing.failures` entry each. A
+  conflict without a positive match is such a non-member, not a diagnostic: the contradiction
+  reading requires the session to partly match. Hosts print the count as one line.
