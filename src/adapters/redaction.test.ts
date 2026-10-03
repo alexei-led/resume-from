@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import * as claudeCode from "./claude-code/redaction.js";
 import * as codex from "./codex/redaction.js";
+import * as kimiCode from "./kimi-code/redaction.js";
 import * as pi from "./pi/redaction.js";
 
 const IMPLEMENTATIONS = [
   ["pi", pi],
   ["codex", codex],
   ["claude-code", claudeCode],
+  ["kimi-code", kimiCode],
 ] as const;
 
 describe.each(IMPLEMENTATIONS)("%s credential redaction", (_name, redaction) => {

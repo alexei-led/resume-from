@@ -14,6 +14,8 @@ const AGENT_NAMES: Record<string, AgentId> = {
   codex: "codex",
   claude: "claude-code",
   "claude-code": "claude-code",
+  kimi: "kimi-code",
+  "kimi-code": "kimi-code",
 };
 
 const KNOWN_AGENTS = Object.keys(AGENT_NAMES).join(", ");

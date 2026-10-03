@@ -60,7 +60,7 @@ treats every guarantee as conditional on the add-only commit path and on reading
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -519,7 +519,7 @@ between runs, T-CC-17 checks T-CC-11's discipline against it as well.
   than performing the edit. FR-49 outranks convenience.
 
 **T-CC-13 — source sessions are byte-identical**
-- Scenario: a Claude Code session is used as a source for an import into each of the three agents.
+- Scenario: a Claude Code session is used as a source for an import into each of the shipped agents.
 - Expected behavior: every file of the source home is byte-identical afterwards (NG-1, AC-4).
 
 **T-CC-14 — excluded content never crosses**

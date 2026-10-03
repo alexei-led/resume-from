@@ -10,7 +10,7 @@ This module is everything the tool knows about Pi: how Pi stores a session, how 
 neutral vocabulary, how to write a new one Pi can open, what Pi can do that the other two agents
 cannot, and how to move the user into the new session.
 
-Pi is the only one of the three agents that can both open its own picker and move the user without a
+Pi is the only one of the shipped agents that can both open its own picker and move the user without a
 second command (C-10). Those two abilities are declared here, and the rest of the system reads them
 as capability data — it never learns Pi's name.
 
@@ -60,7 +60,7 @@ folder changes.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -534,7 +534,7 @@ that keep the design honest about facts nobody may assume.
 - Expected behavior: identical (FR-49, FR-53).
 
 **T-PI-12 — source files are byte-identical**
-- Scenario: a Pi session is used as a source for an import into each of the three agents.
+- Scenario: a Pi session is used as a source for an import into each of the shipped agents.
 - Expected behavior: every file of the source home is byte-identical afterwards (NG-1, AC-4).
 
 **T-PI-13 — a truncated session file**

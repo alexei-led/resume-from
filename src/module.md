@@ -77,7 +77,7 @@ interface TargetProfile {
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/host/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -263,9 +263,11 @@ those two points knows either name.
 | src/adapters/pi → src/session              | Model    | src          | 2    | 2        | High (core) | Yes (at threshold) | —      |
 | src/adapters/codex → src/session           | Model    | src          | 2    | 2        | High (core) | Yes (at threshold) | —      |
 | src/adapters/claude-code → src/session     | Model    | src          | 2    | 2        | High (core) | Yes (at threshold) | —      |
+| src/adapters/kimi-code → src/session       | Model    | src          | 2    | 2        | High (core) | Yes (at threshold) | —      |
 | src/adapters/pi → src/adapters             | Contract | src/adapters | 1    | 1        | High        | Yes                | —      |
 | src/adapters/codex → src/adapters          | Contract | src/adapters | 1    | 1        | High        | Yes                | —      |
 | src/adapters/claude-code → src/adapters    | Contract | src/adapters | 1    | 1        | High        | Yes                | —      |
+| src/adapters/kimi-code → src/adapters      | Contract | src/adapters | 1    | 1        | High        | Yes                | —      |
 | src/import → src/import/discovery          | Contract | src/import   | 1    | 1        | High        | Yes                | —      |
 | src/import → src/import/transfer           | Contract | src/import   | 1    | 1        | High        | Yes                | —      |
 | src/import → src/import/preview            | Contract | src/import   | 1    | 1        | High        | Yes                | —      |
@@ -298,6 +300,7 @@ those two points knows either name.
 | src/host → src/adapters/pi                 | Contract | src          | 2    | 2        | High        | Yes                | —      |
 | src/host → src/adapters/codex              | Contract | src          | 2    | 2        | High        | Yes                | —      |
 | src/host → src/adapters/claude-code        | Contract | src          | 2    | 2        | High        | Yes                | —      |
+| src/host → src/adapters/kimi-code          | Contract | src          | 2    | 2        | High        | Yes                | —      |
 | src/host → src/import                      | Contract | src          | 1    | 1        | Moderate    | Yes                | —      |
 | src/host → src/platform/config             | Contract | src          | 2    | 2        | Low         | Yes                | —      |
 | src/host → src/platform/repo               | Contract | src          | 2    | 2        | Low         | Yes                | —      |
@@ -520,10 +523,10 @@ important: these are the tests that fail when the architecture erodes.
   session, confirm the preview, type the next instruction.
 - Expected behavior: the agent continues the task and the user explains nothing again.
 
-**T-ROO-14 — AC-1: all nine directions**
-- Scenario: the same test for every cell of the scope table, including the three diagonal cells that
-  move a session between two homes of one agent.
-- Expected behavior: all nine pass.
+**T-ROO-14 — AC-1: every direction of the scope table**
+- Scenario: the same test for every cell of the scope table — every ordered pair of shipped agents —
+  including the diagonal cells that move a session between two homes of one agent.
+- Expected behavior: all pass.
 
 **T-ROO-15 — AC-2: the imported turns are native**
 - Scenario: after each landing, the target's own scrollback and resume list are used.
@@ -537,7 +540,7 @@ important: these are the tests that fail when the architecture erodes.
   content may be stale (FR-25).
 
 **T-ROO-17 — AC-4: every source file is byte-identical**
-- Scenario: a checksum of every file in every source home before and after all nine directions.
+- Scenario: a checksum of every file in every source home before and after every direction.
 - Expected behavior: identical (NG-1).
 
 **T-ROO-18 — AC-5: a very large session leaves room to work**
@@ -550,10 +553,10 @@ important: these are the tests that fail when the architecture erodes.
 - Expected behavior: it opens under the work profile, and both sessions exist afterwards.
 
 **T-ROO-20 — AC-7: a new adapter reaches both roles with one new folder**
-- Scenario: a fake fourth agent is added — one folder under `src/adapters/`, one value in `AgentId`,
+- Scenario: a fake agent is added — one folder under `src/adapters/`, one value in `AgentId`,
   one line in `src/host/`.
-- Expected behavior: it works as a source and as a target, all 16 directions run, and no rule, no
-  preview and no other adapter was edited (FR-57, FR-60).
+- Expected behavior: it works as a source and as a target, every direction of the grown table runs,
+  and no rule, no preview and no other adapter was edited (FR-57, FR-60).
 
 **T-ROO-21 — nothing is written before confirmation, anywhere**
 - Scenario: every host, every direction, cancelled at every cancellation point.

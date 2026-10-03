@@ -7,7 +7,7 @@
 
 Continue an AI coding session in another terminal agent or another profile of the same agent.
 
-`resume-from` converts saved sessions between **Pi**, **Claude Code**, and **Codex**. Use it when you want a different model, provider, tool harness, or account without rebuilding the task context by hand.
+`resume-from` converts saved sessions between **Pi**, **Claude Code**, **Codex**, and **Kimi Code**. Use it when you want a different model, provider, tool harness, or account without rebuilding the task context by hand.
 
 ## Why this exists
 
@@ -39,11 +39,12 @@ The source session is never changed.
 
 Every source-to-target direction is supported, including transfers within the same agent:
 
-| Source \ Target | Pi  | Claude Code | Codex |
-| --------------- | :-: | :---------: | :---: |
-| **Pi**          |  ✓  |      ✓      |   ✓   |
-| **Claude Code** |  ✓  |      ✓      |   ✓   |
-| **Codex**       |  ✓  |      ✓      |   ✓   |
+| Source \ Target | Pi  | Claude Code | Codex | Kimi Code |
+| --------------- | :-: | :---------: | :---: | :-------: |
+| **Pi**          |  ✓  |      ✓      |   ✓   |     ✓     |
+| **Claude Code** |  ✓  |      ✓      |   ✓   |     ✓     |
+| **Codex**       |  ✓  |      ✓      |   ✓   |     ✓     |
+| **Kimi Code**   |  ✓  |      ✓      |   ✓   |     ✓     |
 
 The landing behavior depends on the target:
 
@@ -52,6 +53,7 @@ The landing behavior depends on the target:
 | **Pi**          | Writes and opens the imported session in the current Pi process. |
 | **Claude Code** | Writes the session and prints `claude --resume <session-id>`.    |
 | **Codex**       | Writes the thread and prints `codex resume <thread-id>`.         |
+| **Kimi Code**   | Writes the session and prints `kimi --resume <session-id>`.      |
 
 ## What crosses the boundary
 
