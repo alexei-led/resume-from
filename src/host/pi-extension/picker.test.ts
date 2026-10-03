@@ -19,7 +19,7 @@ function descriptor(over: Partial<SessionDescriptor> & { agent?: AgentId }): Ses
 }
 
 function listing(rows: SessionDescriptor[]): Listing {
-  return { rows, failures: [] };
+  return { rows, failures: [], excluded: 0 };
 }
 
 function keys(sequence: PickerKey[]): KeySource {

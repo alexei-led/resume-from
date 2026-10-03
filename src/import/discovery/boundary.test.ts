@@ -181,11 +181,9 @@ it("T-DIS-18 — an empty listing is not an error", async () => {
   ]).list(scopeFor(repoA));
 
   expect(listing.rows).toEqual([]);
-  expect(listing.failures).toEqual([
-    expect.objectContaining({
-      message: expect.stringContaining("unresolved recorded directories"),
-    }),
-  ]);
+  // A session that resolved in another repository is the normal FR-13 exclusion: counted.
+  expect(listing.failures).toEqual([]);
+  expect(listing.excluded).toBe(1);
 });
 
 it("T-DIS-19 — nothing is written", async () => {

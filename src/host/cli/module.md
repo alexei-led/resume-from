@@ -20,7 +20,9 @@ and pipeline results into text.
 - Parse the invocation: no argument, a row number, a session ID, a file path, an agent name, a home
   path (FR-2, FR-10, FR-12, FR-15).
 - With no selection: print the numbered list — agent, home, time, title, turn count — newest first
-  (FR-11, FR-14), and print skipped entries (homes or sessions) with their diagnostics.
+  (FR-11, FR-14), and print skipped entries (homes or sessions) with their diagnostics — and
+  the count of sessions that belong to other repositories as one line (FR-13's normal case,
+  not one narration per session).
 - With a selection and no confirmation: print the preview exactly as `PreviewReport.lines` gives it
   (FR-16, FR-21), and print how to confirm.
 - With a confirmation: run the commit and print the outcome — the new session ID and the native
@@ -164,8 +166,16 @@ interface HomeFailure {
 interface Listing {
   /** Newest first, across every agent and home (FR-14, FR-15). */
   rows: SessionDescriptor[];
-  /** Homes or sessions that were skipped. Reported to the user, never silent. */
+  /** Homes or sessions skipped for a reason the user can act on. Reported, never silent. */
   failures: HomeFailure[];
+  /**
+   * Sessions that do not belong to this repository (FR-13): no candidate matched, with no
+   * contradictory evidence — every surviving candidate resolved elsewhere, every recorded
+   * directory is gone, or both. A deleted worktree of this repository is indistinguishable
+   * from a deleted foreign one, and neither can be imported. Searching a whole home makes
+   * this the normal case, so it is counted, not narrated row by row.
+   */
+  excluded: number;
 }
 ```
 

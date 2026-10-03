@@ -22,7 +22,7 @@ describe("registration", () => {
     const pipeline: ImportPipeline = {
       async list(request) {
         listed.push(request.destinationCwd);
-        return { rows: [], failures: [] };
+        return { rows: [], failures: [], excluded: 0 };
       },
       async preview() {
         throw new Error("not reached");
