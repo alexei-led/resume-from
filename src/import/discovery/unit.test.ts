@@ -243,11 +243,9 @@ it("T-DIS-6 — only sessions of this repository are listed", async () => {
   const listing = await finderOf([adapter]).list(scopeFor(repoA));
 
   expect(listing.rows.map((r) => r.ref.id)).toEqual(["in-a"]);
-  expect(listing.failures).toEqual([
-    expect.objectContaining({
-      message: expect.stringContaining("unresolved recorded directories"),
-    }),
-  ]);
+  // The session of repository B is the normal FR-13 exclusion: counted, not narrated.
+  expect(listing.failures).toEqual([]);
+  expect(listing.excluded).toBe(1);
 });
 
 it("T-DIS-7 — a session with no repository is out of scope", async () => {

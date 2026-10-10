@@ -576,7 +576,7 @@ export function recordingStages(overrides: Partial<PipelineStages> = {}): StageR
     finder: {
       async list() {
         calls.push("finder.list");
-        return { rows: [descriptor], failures: [] };
+        return { rows: [descriptor], failures: [], excluded: 0 };
       },
       async resolve() {
         calls.push("finder.resolve");

@@ -22,6 +22,15 @@ export function renderListing(listing: Listing, destinationCwd: string): string[
       );
     }
   }
+  // Sessions that belong to other repositories are the normal case when a whole home is
+  // searched (FR-13): the count is printed, the sessions are not narrated row by row.
+  if (listing.excluded > 0) {
+    const count = listing.excluded;
+    lines.push(
+      "",
+      `${count} ${count === 1 ? "session" : "sessions"} ${count === 1 ? "does" : "do"} not belong to this repository and ${count === 1 ? "was" : "were"} not listed.`,
+    );
+  }
 
   if (listing.rows.length > 0) {
     lines.push("", 'Run "/resume-from <n>" to preview a session.');

@@ -82,6 +82,7 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
             message: "home not searched: no such directory",
           },
         ],
+        excluded: 0,
       };
     }
     let found: SessionDescriptor[];
@@ -102,23 +103,23 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
             message: `home not searched: ${reasonLine(reason)}`,
           },
         ],
+        excluded: 0,
       };
     }
 
     const rows: SessionDescriptor[] = [];
     const failures: HomeFailure[] = [];
+    let excluded = 0;
     for (const descriptor of found) {
       deps.repo.checkCancellation();
       let diagnostic: string | null = null;
       try {
         let matched = false;
         let conflictingGitIdentity = false;
-        let existing = false;
         // Do not accept early: a later candidate can disprove the membership.
         for (const candidate of descriptor.repoPaths) {
           const evidence = await lookup(candidate);
           if (evidence === null) continue;
-          existing = true;
           matched ||= isMatch(evidence, destination);
           if (evidence.commonDir !== null) {
             conflictingGitIdentity ||= evidence.commonDir !== destination?.commonDir;
@@ -143,15 +144,22 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
 
         if (matchedHere || startedHere) {
           rows.push(descriptor);
-        } else if (conflictingGitIdentity) {
-          diagnostic =
-            "has conflicting repository identity evidence; its recorded directories cannot unambiguously belong to this destination";
         } else if (descriptor.repoPaths.length === 0) {
           diagnostic = "records no repository, so it cannot be listed here";
+        } else if (matched && conflictingGitIdentity) {
+          // A conflict is a contradiction only when some candidate positively matched: part of
+          // the session ran here, part elsewhere. Without a match, a foreign git identity
+          // merely means the session belongs to another repository — the normal FR-13
+          // exclusion, counted below like every other non-member.
+          diagnostic =
+            "has conflicting repository identity evidence; its recorded directories cannot unambiguously belong to this destination";
         } else {
-          diagnostic = existing
-            ? "has unresolved recorded directories with no matching repository evidence"
-            : "has only missing recorded directories; repository membership cannot be established";
+          // The session does not belong here: every surviving candidate resolved elsewhere,
+          // every recorded directory is gone, or both. A deleted worktree of this repository
+          // is indistinguishable from a deleted foreign one, and neither can be imported —
+          // so non-membership in all its forms is the normal product of searching a whole
+          // home (FR-13): counted, not narrated row by row.
+          excluded += 1;
         }
       } catch (reason) {
         deps.repo.checkCancellation();
@@ -166,7 +174,7 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
         });
       }
     }
-    return { rows, failures };
+    return { rows, failures, excluded };
   }
 
   /** The single listing both `list` and `resolve` use, so the two always agree (FR-10). */
@@ -244,12 +252,14 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
 
     const rows: SessionDescriptor[] = [];
     const failures: HomeFailure[] = [];
+    let excluded = 0;
     for (const part of collected) {
       rows.push(...part.rows);
       failures.push(...part.failures);
+      excluded += part.excluded;
     }
     rows.sort(compareDescriptors);
-    return { rows, failures };
+    return { rows, failures, excluded };
   }
 
   async function resolveRow(

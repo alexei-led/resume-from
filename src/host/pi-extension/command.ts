@@ -142,6 +142,14 @@ async function resolveSelection(
   if (listing.failures.length > 0) {
     deps.ui.show(listing.failures.map(formatFailure)); // Home and session failures are never silent.
   }
+  if (listing.excluded > 0) {
+    // Non-membership is the normal product of searching a whole home (FR-13): the count is
+    // shown, the sessions are not narrated row by row.
+    const count = listing.excluded;
+    deps.ui.show([
+      `${count} ${count === 1 ? "session" : "sessions"} ${count === 1 ? "does" : "do"} not belong to this repository and ${count === 1 ? "was" : "were"} not listed.`,
+    ]);
+  }
   if (listing.rows.length === 0) {
     deps.ui.show([`No sessions to import for ${scope.destinationCwd}.`]);
     return null; // A picker over nothing is a trap.

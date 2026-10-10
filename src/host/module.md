@@ -499,8 +499,16 @@ interface HomeFailure {
 interface Listing {
   /** Newest first, across every agent and home (FR-14, FR-15). */
   rows: SessionDescriptor[];
-  /** Homes or sessions that were skipped. Reported to the user, never silent. */
+  /** Homes or sessions skipped for a reason the user can act on. Reported, never silent. */
   failures: HomeFailure[];
+  /**
+   * Sessions that do not belong to this repository (FR-13): no candidate matched, with no
+   * contradictory evidence — every surviving candidate resolved elsewhere, every recorded
+   * directory is gone, or both. A deleted worktree of this repository is indistinguishable
+   * from a deleted foreign one, and neither can be imported. Searching a whole home makes
+   * this the normal case, so it is counted, not narrated row by row.
+   */
+  excluded: number;
 }
 ```
 
