@@ -129,7 +129,11 @@ describe.each(cases)(
         { cwd: "/repo" },
       );
 
-      expect(serialized.files).toHaveLength(1);
+      // One file for every agent but Kimi Code, whose native session is a wire.jsonl plus a
+      // state.json; the landing commits them one at a time, ordered so no prefix is a session
+      // the agent would list (Kimi Code: wire first — without state.json the directory is
+      // invisible to its index).
+      expect(serialized.files.length).toBeGreaterThanOrEqual(1);
       expect(serialized.itemCount).toBeGreaterThan(0);
       expect(serialized.sessionId.length).toBeGreaterThan(0);
       for (const file of serialized.files) {

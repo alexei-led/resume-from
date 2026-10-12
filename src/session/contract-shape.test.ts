@@ -86,7 +86,7 @@ const KEY_SETS_ARE_EXACT: [
 ] = [true, true, true, true, true, true, true, true, true];
 
 /** The runtime form of `AgentId`, tied to the type so a half-added agent fails the build. */
-const AGENT_IDS = ["pi", "codex", "claude-code"] as const;
+const AGENT_IDS = ["pi", "codex", "claude-code", "kimi-code"] as const;
 const AGENT_IDS_ARE_EXACT: Equals<(typeof AGENT_IDS)[number], AgentId> = true;
 
 /**

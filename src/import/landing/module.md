@@ -22,7 +22,7 @@ including agents that do not exist yet.
   of the import, and what was dropped (FR-47).
 - Ask the target adapter to serialize the plan into its own format (FR-40, FR-41).
 - Validate the serialized session before it reaches the target home (FR-50).
-- Commit the adapter's exactly-one file output, add-only and atomically published (FR-49, FR-53).
+- Commit the adapter's file output one file at a time, add-only and atomically published per file (FR-49, FR-53).
 - Read the session back and compare the number of items sent with the number stored (FR-52), and
   check the target can open it (FR-51).
 - If reconciliation or openability fails after commit, preserve the published paths and report them
@@ -58,7 +58,7 @@ port. This module holds the order and the guarantees, not the formats.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -524,9 +524,14 @@ None of these touch a rule, a preview, or an adapter.
   reproducible in tests.
 - **A plan with a non-null `blockedReason` is refused before serialization** (FR-33). The preview
   should already have stopped it; this is the second gate.
-- **One session serializes to exactly one file.** A target adapter that returns zero or more than
-  one file is refused before validation or placement. Zero files produces vacuous success and
-  confusing read-back results; more than one file breaks multi-path process-interruption atomicity.
+- **One session serializes to one ordered list of files, committed one at a time.** Zero files is
+  refused before validation or placement: it produces vacuous success and confusing read-back
+  results. Each file goes through the store separately, so the store's one-file atomicity stays
+  untouched; the adapter must order its files so that no prefix forms a session the target agent
+  would list or open, and an interrupted multi-file landing then leaves at most files no agent
+  reads — the same guarantee the store gives its temporary names. Kimi Code's adapter lists its
+  `wire.jsonl` before its `state.json` for that reason: without `state.json` the directory is
+  invisible to Kimi Code's session index and its resume command.
 - **Errors name the stage and the next step** (FR-56). "Write failed" alone is not an acceptable
   message.
 

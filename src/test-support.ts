@@ -924,6 +924,7 @@ export const HOME_ENV: Record<string, string> = {
   pi: "PI_CODING_AGENT_DIR",
   codex: "CODEX_HOME",
   "claude-code": "CLAUDE_CONFIG_DIR",
+  "kimi-code": "KIMI_CODE_HOME",
 };
 
 export interface EnvGuard {

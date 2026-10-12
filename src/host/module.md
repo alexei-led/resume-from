@@ -53,7 +53,7 @@ see the Internal Design section.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -740,12 +740,13 @@ interface TargetProfileBuilder {
 - **Shared knowledge**: `AgentAdapter`, `AgentCapabilities` and the four capability enums,
   `AgentRuntime`, `ValidationDefect`, `SerializedSession`, `StoredSessionFacts` and `SwitchOutcome`,
   restated in the Public Contract section above. This is the port contract; the entry below is the
-  separate dependency on the three concrete implementations.
+  separate dependency on the concrete implementations.
 
 ---
 
-- **Counterpart**: `src/adapters/pi/`, `src/adapters/codex/`, `src/adapters/claude-code/`
-- **Direction**: `src/host/` depends on all three — it constructs them for the list
+- **Counterpart**: `src/adapters/pi/`, `src/adapters/codex/`, `src/adapters/claude-code/`,
+  `src/adapters/kimi-code/`
+- **Direction**: `src/host/` depends on all of them — it constructs them for the list
 - **Strength**: contract — it builds them through their factories and holds them as `AgentAdapter`
 - **LCA / Rank / Distance**: LCA `src/`, rank 2, distance 2 for each
 - **Volatility**: high on the adapter side
@@ -890,7 +891,7 @@ Changes that require **only this module** to change:
   equals the values of `AgentId`.
 
 **T-HOS-2 — lookup by agent**
-- Scenario: `get` for each of the three agents.
+- Scenario: `get` for each of the shipped agents.
 - Expected behavior: the matching adapter each time.
 
 **T-HOS-3 — an unknown agent rejects**
@@ -977,7 +978,7 @@ Changes that require **only this module** to change:
   `src/host/cli/`, `src/host/pi-extension/` or `src/platform/` is edited (FR-57, AC-7).
 
 **T-HOS-19 — the profile is right for every agent**
-- Scenario: `createHost` then `pipelineFor` for each of the three agents, with and without
+- Scenario: `createHost` then `pipelineFor` for each of the shipped agents, with and without
   configuration overrides.
 - Expected behavior: each profile carries the right home and a positive window, so the budget line
   of FR-18 is correct in every case.

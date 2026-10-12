@@ -1,8 +1,8 @@
 # Agent Adapters
 
-**Path**: src/adapters/ — the module's code is everything in this folder and its transparent subfolders, excluding the submodule folders `pi/`, `codex/`, `claude-code/`
+**Path**: src/adapters/ — the module's code is everything in this folder and its transparent subfolders, excluding the submodule folders `pi/`, `codex/`, `claude-code/`, `kimi-code/`
 **Parent**: `src/` (root)
-**Submodules**: `pi/`, `codex/`, `claude-code/`
+**Submodules**: `pi/`, `codex/`, `claude-code/`, `kimi-code/`
 
 ## Purpose
 
@@ -61,7 +61,7 @@ that agent, and no other module may hold it.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -378,6 +378,7 @@ list and picks.
 | `pi/`          | source, target | interactive-picker | create-and-switch | out-of-context-entry | `ctx.switchSession` works from a command handler (C-10); a missing `usage` object crashes Pi (C-11)         |
 | `codex/`       | source, target | numbered-list      | create-only       | host-output-only | the picker and transcript are built from `event_msg` entries; provenance is printed by the CLI because Codex has no verified out-of-context entry (C-7, C-8) |
 | `claude-code/` | source, target | numbered-list      | create-only       | out-of-context-entry | two entry types are enough, `user` and `assistant`; the store has ten and eight were unnecessary (C-3, C-9) |
+| `kimi-code/`   | source, target | numbered-list      | create-only       | host-output-only | a session is a `state.json` plus a `wire.jsonl`; the import writes the message-based shape Kimi Code's own migration writes (C-14, C-15) |
 
 ### The order the port is called in
 
@@ -458,11 +459,11 @@ module.
   otherwise cross to a different model vendor when the session is resumed there. Each adapter applies
   `redactSensitiveText` to every non-empty turn text at the point of construction, so no turn that
   reaches `CanonicalSession.turns` can carry a recognizable credential in its `text` field.
-- **The three adapter copies of `redaction.ts` are byte-identical by design.** Consolidating into a
+- **The four adapter copies of `redaction.ts` are byte-identical by design.** Consolidating into a
   shared module is blocked: `src/adapters/contract.ts` is types-only (no behaviour), and importing
   behaviour from `src/platform/` would violate T-ROO-7 (cross-module imports must go through
   `/contract.js`, which can export only types). The byte-equality invariant is enforced by
-  `src/adapters/boundary.test.ts`; a fix in one copy must be applied to all three.
+  `src/adapters/boundary.test.ts`; a fix in one copy must be applied to all four.
 - **Redaction takes each value whole, and the key name is bounded.** A key and its value are matched
   as one span and the value is replaced in full, so no credential is ever left partly in place: a
   quoted key of any length, a URL-encoded or `~`-bearing token, a 4200-character JWT on a `token:`
@@ -496,7 +497,7 @@ module.
 - **An adapter declares a capability it actually has.** Declaring `"create-and-switch"` without a
   working `switchTo` breaks FR-43, and the failure surfaces after the session is already committed.
 - **The conformance suite's fake adapter lives outside `src/`.** Several tests across the tree add a
-  fourth, invented agent to prove that a capability decides behaviour and that FR-57 costs one folder
+  invented agent to prove that a capability decides behaviour and that FR-57 costs one folder
   and one line (T-ADA-21, T-ADA-22, T-HOS-10, T-HOS-18, T-IMP-24, T-CLI-23, T-ROO-20). That fixture
   adapter lives at `test/fixtures/fixture-agent/`, declares the agent id `"fixture-agent"`, and is
   registered only by the test that uses it. It is **not** a module of the design tree: it has no
@@ -558,26 +559,26 @@ These run against every adapter in the list.
   `itemCount` and `openable` true (FR-51, FR-52).
 
 **T-ADA-9 — the round trip preserves what must cross**
-- Scenario: for every ordered pair of adapters, including each adapter with itself — the nine
-  directions of the scope table — the reference session is loaded by the source adapter, serialized
+- Scenario: for every ordered pair of adapters, including each adapter with itself — every cell
+  of the scope table, sixteen directions at the four shipped agents — the reference session is loaded by the source adapter, serialized
   by the target adapter, committed, and loaded back by the target adapter acting as a source.
 - Expected behavior: the visible user messages, the agent answers, the summaries, and the tool names
   survive unchanged. This one parameterized test covers AC-1.
 
 **T-ADA-10 — no result body survives any direction**
-- Scenario: the same nine directions, with a source session whose tool results contain the marker
+- Scenario: the same every-direction run, with a source session whose tool results contain the marker
   string `SECRET-BODY-CONTENT`.
 - Expected behavior: the string does not appear anywhere in the committed files (FR-24), including
   the diagonal cells where the source and target agent are the same (the explicit FR-24 test).
 
 **T-ADA-11 — every dropped body is marked**
-- Scenario: the nine directions, with a source session containing a `Read` whose result was 400
+- Scenario: every direction, with a source session containing a `Read` whose result was 400
   lines.
 - Expected behavior: the record reads `Read('src/auth.ts') → 400 lines` and carries
   `(content dropped: imported session, may be stale)` (FR-23, FR-25).
 
 **T-ADA-12 — tool names are not translated**
-- Scenario: the nine directions, with tool names `Read`, `Edit`, `shell`, and an invented
+- Scenario: every direction, with tool names `Read`, `Edit`, `shell`, and an invented
   `Frobnicate`.
 - Expected behavior: each name appears unchanged in the target's file (FR-27).
 
@@ -589,7 +590,7 @@ These run against every adapter in the list.
 - Expected behavior: identical. Serializing produces bytes and nothing else (FR-49, FR-53).
 
 **T-ADA-14 — every source file is byte-identical after an import**
-- Scenario: the nine directions; every file in the source home is checksummed before and after.
+- Scenario: every direction; every file in the source home is checksummed before and after.
 - Expected behavior: identical, including modification times where the platform preserves them
   (NG-1, AC-4).
 
@@ -635,7 +636,7 @@ These run against every adapter in the list.
 
 **T-ADA-21 — a capability decides behaviour, an agent name never does**
 - Scenario: a fake adapter is added to the suite declaring `"numbered-list"` and `"create-only"`,
-  with a format unlike any of the three real agents.
+  with a format unlike any of the real agents.
 - Expected behavior: it gets the numbered list (FR-58's test) and the handover message (FR-45),
   purely from its declaration. No rule, no preview and no other adapter is edited to make it work —
   which is the test of FR-57 and FR-60 together.

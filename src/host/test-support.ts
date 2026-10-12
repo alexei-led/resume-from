@@ -377,6 +377,7 @@ export const HOME_ENV: Record<string, string> = {
   pi: "PI_CODING_AGENT_DIR",
   codex: "CODEX_HOME",
   "claude-code": "CLAUDE_CONFIG_DIR",
+  "kimi-code": "KIMI_CODE_HOME",
 };
 
 export interface EnvGuard {
@@ -432,7 +433,11 @@ export async function seedSession(
     windowTokens: adapter.capabilities().defaultWindowTokens,
   };
   const serialized = adapter.serialize(session, target, markerFor(session), context);
-  await createFileCommitter().commit(home, serialized.files);
+  // One commit per file, in the adapter's order: the store's one-file atomicity stays
+  // untouched, and an adapter that orders its files safely leaves no visible partial session.
+  for (const file of serialized.files) {
+    await createFileCommitter().commit(home, [file]);
+  }
   return serialized.sessionId;
 }
 

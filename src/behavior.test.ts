@@ -54,6 +54,14 @@ import {
 
 const SESSION_CONTRACT = join(SRC_DIR, "session", "contract.ts");
 
+/** How many agents the shipped `AgentId` union declares — read from source, never spelled out. */
+function shippedAgentCount(): number {
+  return unionMembers(
+    parseSource(SESSION_CONTRACT, readFileSync(SESSION_CONTRACT, "utf8")),
+    "AgentId",
+  ).length;
+}
+
 /**
  * A stand-in for Pi's command context. It lives in this file rather than in `test-support.ts`
  * because T-PI-20 allows the name `switchSession` in `src/adapters/pi/` and
@@ -142,10 +150,13 @@ describe("the nine directions of the scope table", () => {
   });
 
   describe("T-ROO-14 — AC-1: all nine directions", () => {
-    it("runs every cell of the table, including the three diagonal ones", () => {
-      expect(directions).toHaveLength(9);
+    it("runs every cell of the table, including the diagonal ones", () => {
+      // The scope table is square: one cell per ordered pair of shipped agents, the
+      // diagonal included. It grew from nine cells at three agents to sixteen at four.
+      const agents = scene.homes.size;
+      expect(directions).toHaveLength(agents * agents);
       const diagonal = directions.filter((direction) => direction.source === direction.target);
-      expect(diagonal).toHaveLength(3);
+      expect(diagonal).toHaveLength(agents);
       // A diagonal cell moves a session between two homes of one agent (FR-4).
       for (const direction of diagonal) {
         expect(direction.result.ref.home).not.toBe(scene.homes.get(direction.source));
@@ -463,8 +474,9 @@ describe("T-ROO-20 — AC-7: a new adapter reaches both roles with one new folde
     await cleanupTempDirs();
   });
 
-  it("the fourth agent is in the list and fills both roles (FR-59)", () => {
-    expect(scene.host.registry().all()).toHaveLength(4);
+  it("the invented agent is in the list and fills both roles (FR-59)", () => {
+    // The registry holds every shipped agent plus the invented one.
+    expect(scene.host.registry().all()).toHaveLength(shippedAgentCount() + 1);
     // Which one is the fourth is read from the shipped `AgentId` union, never spelled out here:
     // this test must keep working when the union grows (FR-57).
     const shippedAgents = unionMembers(
@@ -481,8 +493,11 @@ describe("T-ROO-20 — AC-7: a new adapter reaches both roles with one new folde
     expect(scene.host.registry().targets().map(agentOf)).toContain(fourth);
   });
 
-  it("all 16 directions run", () => {
-    expect(directions).toHaveLength(16);
+  it("every direction of the grown table runs", () => {
+    // Square of the grown list: every shipped agent plus the invented one, crossed with
+    // itself. Sixteen directions at three shipped agents, twenty-five at four.
+    const agents = shippedAgentCount() + 1;
+    expect(directions).toHaveLength(agents * agents);
     for (const direction of directions) {
       expect([direction.name, direction.result.itemsStored]).toEqual([
         direction.name,

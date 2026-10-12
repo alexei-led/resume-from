@@ -53,7 +53,7 @@ FR-20; what changes is what the stages return.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -888,10 +888,11 @@ without any agent installed; the live equivalents live in the adapter modules.
 
 ### Integration Contract Tests
 
-**T-IMP-7 — all nine directions run end to end**
-- Scenario: for every ordered pair of the three agents, including each with itself, the reference
+**T-IMP-7 — every direction runs end to end**
+- Scenario: for every ordered pair of the shipped agents, including each with itself, the reference
   session is listed, previewed and committed.
-- Expected behavior: nine successful landings. This is AC-1 at the pipeline level.
+- Expected behavior: every landing succeeds — sixteen of them at the four shipped agents. This is
+  AC-1 at the pipeline level.
 
 **T-IMP-8 — preview and commit compute the same plan**
 - Scenario: `preview` then `commit` for the same request, with the plan captured at both points.

@@ -26,7 +26,7 @@ import {
 } from "./test-support.js";
 import { createHost, type Host } from "./wiring.js";
 
-const REAL_AGENTS: AgentId[] = ["pi", "codex", "claude-code"];
+const REAL_AGENTS: AgentId[] = ["pi", "codex", "claude-code", "kimi-code"];
 
 const configLoader = (config: ImportConfig = testConfig()) => ({
   load: () => Promise.resolve(config),
@@ -119,7 +119,7 @@ describe("T-HOS-18 — adding an agent costs one folder and one line", () => {
       .all()
       .map((adapter) => adapter.capabilities().agent);
     expect(listed).toContain(FIXTURE_AGENT_ID);
-    expect(listed).toHaveLength(4);
+    expect(listed).toHaveLength(REAL_AGENTS.length + 1);
   });
 
   it("it reaches both roles (FR-59)", () => {
@@ -136,8 +136,8 @@ describe("T-HOS-18 — adding an agent costs one folder and one line", () => {
     );
   };
 
-  it("runs all 16 directions", () => {
-    expect(directions()).toHaveLength(16);
+  it("runs every direction of the grown table", () => {
+    expect(directions()).toHaveLength((REAL_AGENTS.length + 1) * (REAL_AGENTS.length + 1));
   });
 
   it.each(directions())(

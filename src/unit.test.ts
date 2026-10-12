@@ -47,6 +47,7 @@ async function emptyScene(): Promise<Scene> {
       pi: join(home, "pi"),
       codex: join(home, "codex"),
       "claude-code": join(home, "claude-code"),
+      "kimi-code": join(home, "kimi-code"),
     },
     home,
   );

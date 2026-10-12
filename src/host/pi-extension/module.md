@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This module is `/resume-from` inside Pi. Pi is the only one of the three agents that can host an
+This module is `/resume-from` inside Pi. Pi is the only one of the shipped agents that can host an
 interactive picker and move the user into the new session without a second command (C-10), so it gets
 the best experience the requirements allow: pick with the arrow keys (FR-9), confirm the preview, and
 land already inside the new session (FR-44).
@@ -52,7 +52,7 @@ The split is deliberate: the format changes for one reason, the extension API fo
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;

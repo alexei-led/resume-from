@@ -3,7 +3,7 @@
 // the document wins and this file is corrected.
 
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-export type AgentId = "pi" | "codex" | "claude-code";
+export type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 export type HomePath = string;

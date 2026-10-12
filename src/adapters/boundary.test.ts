@@ -171,7 +171,7 @@ describe.each(cases)("T-ADA-18 — %s: a minted session ID does not collide", (_
     const existing: PendingFile[] = [];
     for (let n = 0; n < 100; n++) {
       const files = adapter.serialize(REFERENCE_SESSION, profile, marker, { cwd: "/repo" }).files;
-      expect(files).toHaveLength(1);
+      expect(files.length).toBeGreaterThanOrEqual(1);
       existing.push(...files);
       await commit(files);
     }
@@ -266,11 +266,11 @@ describe.each(cases)(
 );
 
 /**
- * Finding 2 (P2, design): the three redaction.ts copies are byte-identical.
+ * Finding 2 (P2, design): the four redaction.ts copies are byte-identical.
  * Consolidating into a shared module is blocked: src/adapters/contract.ts is types-only, and
  * importing behaviour from src/platform/ would be rejected by T-ROO-7 (adapter imports from a
  * non-parent, non-composition-root module must end in /contract.js — which exports only types).
- * The three files are kept in sync by policy. This test enforces that policy mechanically.
+ * The four files are kept in sync by policy. This test enforces that policy mechanically.
  */
 describe("redaction implementations are byte-identical across adapter submodules", () => {
   // fileURLToPath, not .pathname: a checkout path with spaces or non-ASCII must not
@@ -279,10 +279,11 @@ describe("redaction implementations are byte-identical across adapter submodules
   const REDACTION_FILES = [
     join(ADAPTERS_DIR, "claude-code", "redaction.ts"),
     join(ADAPTERS_DIR, "codex", "redaction.ts"),
+    join(ADAPTERS_DIR, "kimi-code", "redaction.ts"),
     join(ADAPTERS_DIR, "pi", "redaction.ts"),
   ];
 
-  it("all three redaction.ts files are byte-identical (edit all three together)", () => {
+  it("all four redaction.ts files are byte-identical (edit all four together)", () => {
     const [first, ...rest] = REDACTION_FILES.map((file) => readFileSync(file, "utf8"));
     for (const content of rest) {
       expect(content).toBe(first);

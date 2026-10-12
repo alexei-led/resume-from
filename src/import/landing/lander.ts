@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type {
   AgentAdapter,
   AgentRuntime,
@@ -110,11 +111,27 @@ async function runLanding(
       `The ${target} adapter could not turn the plan into its own session format: ${reasonOf(cause)}. Nothing was written to ${home}. ${RETRY}`,
     );
   }
-  if (serialized.files.length !== 1) {
+  if (serialized.files.length === 0) {
     throw new LandingFailure(
       "serialize",
-      `The ${target} adapter produced ${serialized.files.length} files for one session. Exactly one file is required for atomic placement, so nothing was written to ${home}. Report this as an adapter bug.`,
+      `The ${target} adapter produced ${serialized.files.length} files for one session, so nothing was written to ${home}. Report this as an adapter bug.`,
     );
+  }
+  // A session is one or more files, committed one at a time through the store, whose one-file
+  // atomicity invariant stays untouched. An adapter must order its files so that no prefix forms
+  // a session the target agent would list or open: an interrupted multi-file landing then leaves
+  // at most files no agent reads, exactly like the store's temporary names. Kimi Code's adapter
+  // commits its wire.jsonl before its state.json for that reason — without state.json the
+  // directory is invisible to Kimi Code's session index and its resume command.
+  const lastFile = serialized.files.at(-1);
+  const sessionDir = lastFile === undefined ? null : dirname(lastFile.absolutePath);
+  for (const file of serialized.files.slice(0, -1)) {
+    if (sessionDir === null || !file.absolutePath.startsWith(`${sessionDir}${"/"}`)) {
+      throw new LandingFailure(
+        "serialize",
+        `The ${target} adapter scattered one session outside its own directory, so nothing was written to ${home}. Report this as an adapter bug.`,
+      );
+    }
   }
 
   let defects: ValidationDefect[];
@@ -135,9 +152,12 @@ async function runLanding(
     );
   }
 
-  let createdPaths: string[];
+  const createdPaths: string[] = [];
   try {
-    ({ createdPaths } = await committer.commit(home, serialized.files));
+    for (const file of serialized.files) {
+      const handle = await committer.commit(home, [file]);
+      createdPaths.push(...handle.createdPaths);
+    }
   } catch (cause) {
     const refused = asCommitError(cause);
     const where = refused?.path ? ` (path: ${refused.path})` : "";

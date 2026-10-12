@@ -32,7 +32,7 @@ Selectors:
   <file-path>       Select a session file by absolute, relative or ~/ path.
 
 Options:
-  --agent <name>    Filter source sessions: pi, codex, claude, or claude-code.
+  --agent <name>    Filter source sessions: pi, codex, claude, claude-code, or kimi.
   --home <path>     Search one source home, even one outside the configuration.
   --confirm <token> Import the exact selection and preview identified by the token.
   --target-agent    Target host ID; normally supplied by the installed plugin.

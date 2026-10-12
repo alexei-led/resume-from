@@ -84,7 +84,7 @@ exists, and the reason this module's `readBack` is not optional.
 <!-- contract: AgentId, HomePath, SessionId, SessionRef — restated from src/session/module.md -->
 ```ts
 /** Which agent produced or receives a session. Adding an agent adds one value (FR-57). */
-type AgentId = "pi" | "codex" | "claude-code";
+type AgentId = "pi" | "codex" | "claude-code" | "kimi-code";
 
 /** Absolute path of an agent profile directory, for example "/Users/me/.claude-team" (FR-2). */
 type HomePath = string;
@@ -551,7 +551,7 @@ says Codex fails silently, so nothing here may be inferred from the absence of a
 - Expected behavior: identical (FR-49, FR-53).
 
 **T-COD-11 — source threads are byte-identical**
-- Scenario: a Codex thread is used as a source for an import into each of the three agents.
+- Scenario: a Codex thread is used as a source for an import into each of the shipped agents.
 - Expected behavior: every file of the source home is byte-identical afterwards (NG-1, AC-4).
 
 **T-COD-12 — the injection API is never called**

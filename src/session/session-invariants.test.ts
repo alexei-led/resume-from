@@ -25,7 +25,7 @@ import type {
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
-const AGENT_IDS = ["pi", "codex", "claude-code"] as const satisfies readonly AgentId[];
+const AGENT_IDS = ["pi", "codex", "claude-code", "kimi-code"] as const satisfies readonly AgentId[];
 
 /** ISO-8601 in UTC: never local time, never an epoch number. */
 function isIsoUtc(value: string): boolean {
@@ -199,6 +199,25 @@ const AGENT_SESSIONS: Record<AgentId, CanonicalSession> = {
       outcomeLine: "Write('src/router/routes.ts') → 120 lines written",
       effect: "mutating",
       bodyDropped: false,
+      resultRecorded: true,
+    },
+  }),
+  "kimi-code": sessionFor({
+    ref: {
+      agent: "kimi-code",
+      home: "/home/testuser/.kimi-code",
+      id: "session_7f3a2b1c-4d5e-4f6a-9b0c-1d2e3f4a5b6c",
+    },
+    subject: "trace the pose publisher",
+    closing: "Traced the publisher; the frame ids were the mismatch.",
+    repo: { commit: null, branch: "main", changedPaths: ["src/pose_pub.cpp"] },
+    stamp: "2026-07-30T11:04:12Z",
+    call: {
+      toolName: "Read",
+      argumentsText: '{"path":"src/pose_pub.cpp"}',
+      outcomeLine: 'Read({"path":"src/pose_pub.cpp"}) → 64 lines, body dropped',
+      effect: "read-only",
+      bodyDropped: true,
       resultRecorded: true,
     },
   }),

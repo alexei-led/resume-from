@@ -50,6 +50,7 @@ import type {
   StoredSessionFacts,
   TargetProfile,
 } from "./contract.js";
+import { kimiCodeAdapterFactory } from "./kimi-code/index.js";
 import { piAdapterFactory } from "./pi/index.js";
 
 /** The note FR-25 requires on a record whose result body was dropped. */
@@ -286,7 +287,34 @@ export const CLAUDE_CODE_CASE: AdapterCase = {
   plantUnknown: appendUnknownEntry,
 };
 
-/** The invented fourth agent. Its capabilities alone decide what happens to it. */
+/** The metadata fields Kimi Code's session index cannot list a session without. */
+const KIMI_CODE_META_FIELDS = ["cwd", "agents", "createdAt"];
+
+export const KIMI_CODE_CASE: AdapterCase = {
+  id: "kimi-code",
+  folder: "kimi-code",
+  invented: false,
+  create: () => kimiCodeAdapterFactory.create(),
+  runtime: () => null,
+  damage: (serialized, count) => {
+    const state = serialized.files.find((file) => file.absolutePath.endsWith("state.json"));
+    if (state === undefined) throw new Error("nothing to damage");
+    const stateRecord = JSON.parse(state.bytes.toString("utf8")) as Record<string, unknown>;
+    for (const field of KIMI_CODE_META_FIELDS.slice(0, count)) delete stateRecord[field];
+    const damaged = {
+      ...state,
+      bytes: Buffer.from(`${JSON.stringify(stateRecord, null, 2)}\n`, "utf8"),
+    };
+    return {
+      ...serialized,
+      files: serialized.files.map((file) => (file === state ? damaged : file)),
+    };
+  },
+  hide: appendProbe,
+  plantUnknown: appendUnknownEntry,
+};
+
+/** The invented fifth agent. Its capabilities alone decide what happens to it. */
 export const FIXTURE_CASE: AdapterCase = {
   id: FIXTURE_AGENT_ID,
   folder: null,
@@ -344,8 +372,8 @@ export const FIXTURE_CASE: AdapterCase = {
   },
 };
 
-/** The three agents the product ships. T-ADA-9 to T-ADA-12 need all nine of their directions. */
-export const REAL_ADAPTERS: AdapterCase[] = [PI_CASE, CODEX_CASE, CLAUDE_CODE_CASE];
+/** Every real agent the product ships. T-ADA-9 to T-ADA-12 need all of their directions. */
+export const REAL_ADAPTERS: AdapterCase[] = [PI_CASE, CODEX_CASE, CLAUDE_CODE_CASE, KIMI_CODE_CASE];
 
 /** Every adapter the suite runs, the invented fourth included (T-ADA-21). */
 export const ALL_ADAPTERS: AdapterCase[] = [...REAL_ADAPTERS, FIXTURE_CASE];
@@ -409,8 +437,15 @@ export async function commit(files: PendingFile[]): Promise<string[]> {
     return fromRoot !== ".." && !fromRoot.startsWith(`..${path.sep}`) && !path.isAbsolute(fromRoot);
   });
   if (root === undefined) throw new Error(`no throwaway home owns ${first.absolutePath}`);
-  const handle = await committer.commit(root, files);
-  return handle.createdPaths;
+  // One commit per file, in order: the store's one-file atomicity invariant stays untouched,
+  // and an adapter that orders its files safely (wire before state, for Kimi Code) leaves no
+  // visible partial session when a landing is interrupted between commits.
+  const created: string[] = [];
+  for (const file of files) {
+    const handle = await committer.commit(root, [file]);
+    created.push(...handle.createdPaths);
+  }
+  return created;
 }
 
 /** Every file below `dir`: its bytes, its size and its modification time. */

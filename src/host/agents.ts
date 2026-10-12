@@ -12,6 +12,7 @@
 
 import { claudeCodeAdapter } from "../adapters/claude-code/index.js";
 import { codexAdapterFactory } from "../adapters/codex/index.js";
+import { kimiCodeAdapterFactory } from "../adapters/kimi-code/index.js";
 import { piAdapterFactory } from "../adapters/pi/index.js";
 import type { AgentAdapter, EstimatorFamily } from "./contract.js";
 
@@ -36,4 +37,5 @@ export const AGENTS: readonly AgentEntry[] = [
   { create: () => piAdapterFactory.create(), family: "claude" },
   { create: () => codexAdapterFactory.create(), family: "gpt" },
   { create: () => claudeCodeAdapter.create(), family: "claude" },
+  { create: () => kimiCodeAdapterFactory.create(), family: "gpt" },
 ];
