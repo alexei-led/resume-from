@@ -61,6 +61,7 @@ describe("byId", () => {
       (reason: unknown) => reasonOf(reason),
     );
     expect(error?.name).toBe("SessionSelectionError");
+    expect(error?.message).toContain("at least 6 characters");
   });
 
   it("finds a custom ID", async () => {
@@ -106,6 +107,52 @@ describe("byId", () => {
     }
     expect(error?.message).toContain("claude copy");
     expect(error?.message).toContain("codex copy");
+    // The suggested action must be directly usable from the output.
+    expect(error?.message).toContain(join(claudeRoot, `${V4}.json`));
+    expect(error?.message).toContain(join(codexRoot, `${V4}.json`));
+    expect(error?.message).toContain("--agent");
+    expect(error?.message).toContain("--home");
+  });
+
+  it("does not suggest a flag that cannot narrow a same-agent, same-home set", async () => {
+    const { piRoot } = await scene();
+    await writeSession(piRoot, {
+      id: "archfit-alpha",
+      updatedAt: "2026-05-01T08:00:00Z",
+      repoPath: "/work/app",
+    });
+    await writeSession(piRoot, {
+      id: "archfit-beta",
+      updatedAt: "2026-05-02T08:00:00Z",
+      repoPath: "/work/app",
+    });
+    const locator = createSessionLocator({
+      adapters: [makeStubAdapter({ agent: "pi", defaultHome: piRoot, roots: [piRoot] })],
+    });
+
+    const error = await locator.byId("archfit").then(
+      () => null,
+      (reason: unknown) => errorOf(reason),
+    );
+    expect(error?.message).toContain(join(piRoot, "archfit-alpha.json"));
+    expect(error?.message).toContain(join(piRoot, "archfit-beta.json"));
+    expect(error?.message).not.toContain("--agent");
+    expect(error?.message).not.toContain("--home");
+    expect(error?.message).toContain("2026-05-02 08:00Z");
+  });
+
+  it("searches a configured extra home by ID", async () => {
+    const { claudeRoot } = await scene();
+    const extra = await makeDir(root, "team", "claude-team");
+    await writeSession(extra, { id: V4, updatedAt: "2026-05-01T08:00:00Z", repoPath: null });
+    const locator = createSessionLocator({
+      adapters: [
+        makeStubAdapter({ agent: "claude-code", defaultHome: claudeRoot, roots: [claudeRoot] }),
+      ],
+      config: { extraHomes: [{ agent: "claude-code", home: extra }] },
+    });
+
+    expect((await locator.byId(V4)).filePath).toBe(join(extra, `${V4}.json`));
   });
 
   it("deduplicates one file reached through two root spellings", async () => {

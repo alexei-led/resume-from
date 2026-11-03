@@ -452,8 +452,12 @@ Changes that require **only this module** to change:
 - **The pipeline derives `SearchScope.repoRoot` from request `destinationCwd`.** It is an internal search scope, not a second caller-supplied import destination. Repository membership uses canonical Git common-directory identity with exact-directory fallback; it never changes the destination checkout.
 
 - **A global lookup is not filtered by repository (FR-61).** `SessionLocator.byId` and `byPath`
-  search every root of every source adapter; the repository filter of `SessionFinder` does not
-  apply to them. Expanding a root and describing a matched file are reads only.
+  search every root of every source adapter, including the configured `extraHomes`; the repository
+  filter of `SessionFinder` does not apply to them. Expanding a root and describing a matched file
+  are reads only.
+- **A file outside every root is described only by an adapter that identifies its format.** Each
+  adapter's `describeSession` rejects a file whose bytes are not its own, so the first adapter tried
+  cannot claim another agent's session.
 - **Only a matching file is parsed.** A lookup matches the session ID in the file name first and
   hands only matches to the adapter, so a home's unrelated sessions are never read.
 - **Roots are deduplicated by their canonical path.** Two spellings of one search root are one

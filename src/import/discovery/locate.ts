@@ -4,7 +4,7 @@
 
 import { glob, stat } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
-import type { SessionDescriptor, SessionLocator } from "./contract.js";
+import type { ImportConfig, SessionDescriptor, SessionLocator } from "./contract.js";
 import { SessionSelectionError } from "./errors.js";
 import { canonicalPath, expandHome, isDirectory, type SourceAdapter } from "./homes.js";
 import { compareDescriptors } from "./ordering.js";
@@ -34,15 +34,26 @@ interface FoundSession {
 /**
  * Expand every adapter's roots, dropping duplicates and non-directories. With `home`, only the
  * roots inside that one home are searched, so `--home` reaches a home outside the configuration.
+ * Without one, a configured extra home of the adapter is searched as well (FR-5, FR-61).
  */
 async function expandRoots(
   adapters: readonly SourceAdapter[],
   home: string | null = null,
+  extraHomes: ImportConfig["extraHomes"] = [],
 ): Promise<RootSearch[]> {
   const seen = new Set<string>();
   const found: RootSearch[] = [];
   for (const adapter of adapters) {
-    for (const pattern of home === null ? adapter.searchRoots() : adapter.searchRoots(home)) {
+    const agent = adapter.capabilities().agent;
+    const extra =
+      home === null
+        ? extraHomes
+            .filter((entry) => entry.agent === agent)
+            .flatMap((entry) => adapter.searchRoots(entry.home))
+        : [];
+    const patterns =
+      home === null ? [...adapter.searchRoots(), ...extra] : adapter.searchRoots(home);
+    for (const pattern of patterns) {
       let matches: string[];
       try {
         matches = [];
@@ -92,27 +103,46 @@ function directoryOf(descriptor: SessionDescriptor): string {
   return descriptor.startDirectory ?? descriptor.repoPath ?? "(no recorded directory)";
 }
 
+/** ISO-8601 UTC shortened to the minute, the same form the list and the summary print. */
+function shortTime(value: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(value);
+  return match === null ? value : `${match[1]} ${match[2]}Z`;
+}
+
 function describeCandidate(entry: FoundSession): string {
   const { descriptor } = entry;
   return (
     `- ${descriptor.ref.agent} ${descriptor.ref.id} · ${descriptor.ref.home} · ` +
-    `${directoryOf(descriptor)} · ${descriptor.updatedAt || "(no time)"} · ` +
-    `${descriptor.title || "(untitled)"}`
+    `${directoryOf(descriptor)} · ${shortTime(descriptor.updatedAt) || "(no time)"} · ` +
+    `${descriptor.title || "(untitled)"}\n  ${descriptor.filePath}`
   );
 }
+
+/** The shortest prefix the spec allows (FR-61). */
+const MIN_PREFIX = 6;
 
 function noMatchMessage(query: string, roots: readonly RootSearch[]): string {
   const searched =
     roots.length === 0
       ? "(no search root exists)"
       : [...new Set(roots.map((entry) => entry.root))].join(", ");
-  return `No session matches "${query}". Searched: ${searched}.`;
+  // A short query is the one case a user can fix without a wider search: say so.
+  const hint =
+    query.length < MIN_PREFIX
+      ? ` A prefix needs at least ${MIN_PREFIX} characters; use the full ID or a longer prefix.`
+      : "";
+  return `No session matches "${query}".${hint} Searched: ${searched}.`;
 }
 
 function ambiguityMessage(query: string, entries: readonly FoundSession[]): string {
+  // Suggest only the flags that can actually narrow this set.
+  const narrow: string[] = [];
+  if (new Set(entries.map((entry) => entry.descriptor.ref.agent)).size > 1) narrow.push("--agent");
+  if (new Set(entries.map((entry) => entry.descriptor.ref.home)).size > 1) narrow.push("--home");
+  const hint = narrow.length === 0 ? "" : `, or narrow the search with ${narrow.join(" or ")}`;
   return (
     `Session "${query}" matches ${entries.length} sessions. ` +
-    `Select one by exact file path, or narrow the search with --agent or --home:\n` +
+    `Select one by exact file path${hint}:\n` +
     entries.map(describeCandidate).join("\n")
   );
 }
@@ -126,6 +156,8 @@ function isInsidePath(filePath: string, root: string): boolean {
 
 export interface LocatorDeps {
   adapters: readonly SourceAdapter[];
+  /** Configured homes an adapter also searches, beyond the ones its environment names (FR-5). */
+  config?: Pick<ImportConfig, "extraHomes">;
 }
 
 type Accept = (descriptor: SessionDescriptor) => boolean | Promise<boolean>;
@@ -135,7 +167,11 @@ const acceptAll: Accept = () => true;
 /** Finds one session anywhere. It lists nothing it was not asked for and never writes. */
 export function createSessionLocator(deps: LocatorDeps): SessionLocator {
   async function sourcesFor(query: string, home: string | null): Promise<RootSearch[]> {
-    return await expandRoots(rankedSources(deps.adapters, query), home);
+    return await expandRoots(
+      rankedSources(deps.adapters, query),
+      home,
+      deps.config?.extraHomes ?? [],
+    );
   }
 
   return {
@@ -201,7 +237,7 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       // is tried: another adapter accepting the bytes would mislabel the session. Only a file
       // outside every root is offered to each adapter in turn.
       const ordered = rankedSources(deps.adapters, "");
-      const roots = await expandRoots(ordered);
+      const roots = await expandRoots(ordered, null, deps.config?.extraHomes ?? []);
       const containing = new Set(
         roots
           .filter((entry) => isInsidePath(wanted, entry.root))
