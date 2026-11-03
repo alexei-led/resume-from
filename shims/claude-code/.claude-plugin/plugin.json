@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "resume-from",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Continue a coding session from another agent, or another profile of the same agent.",
   "author": {
     "name": "Alexei Ledenev"

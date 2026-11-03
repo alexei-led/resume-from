@@ -23,6 +23,7 @@ The target-agent guide owns installation and landing instructions. The shared ge
 
 ## Releases
 
+- [v0.5.0](releases/v0.5.0.md) — restore a session from its ID alone, native resume, worktree recovery, restore summary.
 - [v0.4.1](releases/v0.4.1.md) — Pi 1.x compatibility, verified on Pi 1.0.2.
 - [v0.4.0](releases/v0.4.0.md) — current Codex sessions import, large homes list in seconds, sessions keep their start directory.
 - [v0.3.1](releases/v0.3.1.md) — dependency and release-tooling updates.
