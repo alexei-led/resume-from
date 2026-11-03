@@ -290,6 +290,10 @@ export function createFixtureAgentAdapter(options: FixtureAgentOptions = {}): Ag
       return describeFile(path.dirname(path.dirname(filePath)), filePath);
     },
 
+    inPlaceCommand(_sessionId: string): string | null {
+      return null;
+    },
+
     resumeCommand(input): string {
       const prompt = input.prompt === null ? "" : ` '${input.prompt}'`;
       return `cd ${input.directory} && fixture-agent resume ${input.sessionId}${prompt}`;

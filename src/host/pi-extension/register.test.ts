@@ -46,6 +46,9 @@ describe("registration", () => {
       async destinationFor() {
         throw new Error("not reached");
       },
+      inPlaceCommand() {
+        return null;
+      },
       resumeCommand() {
         throw new Error("not reached");
       },

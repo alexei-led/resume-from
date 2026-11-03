@@ -217,6 +217,9 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
         }
       );
     },
+    inPlaceCommand(ref) {
+      return ref.agent === "pi" ? null : `/resume ${ref.id}`;
+    },
     resumeCommand(target, directory, prompt) {
       const suffix = prompt === null || prompt === "" ? "" : ` ${prompt}`;
       return `cd ${directory} && ${target.ref.agent} resume ${target.ref.id}${suffix}`;

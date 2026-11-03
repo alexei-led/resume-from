@@ -251,6 +251,7 @@ export function fakeAdapter(options: FakeAdapterOptions): AgentAdapter {
     searchRoots: () => notCalled(options.agent, "searchRoots"),
     findSessions: () => notCalled(options.agent, "findSessions"),
     describeSession: () => notCalled(options.agent, "describeSession"),
+    inPlaceCommand: () => null,
     resumeCommand: () => notCalled(options.agent, "resumeCommand"),
     serialize: () => notCalled(options.agent, "serialize"),
     validate: () => notCalled(options.agent, "validate"),

@@ -11,11 +11,22 @@ export function renderWarnings(warnings: readonly string[]): string[] {
   return warnings.map((warning) => `⚠ ${safeText(warning)}`);
 }
 
-/** The native mode output: summary, warnings, and the command that resumes the session. */
-export function renderNative(summary: string[], place: Place, command: string): string[] {
+/** The in-agent command that opens the session in the running agent, when there is one. */
+function inPlaceLines(inPlace: string | null): string[] {
+  return inPlace === null ? [] : [`Resume in place: ${safeText(inPlace)}`];
+}
+
+/** The native mode output: summary, warnings, and the commands that resume the session. */
+export function renderNative(
+  summary: string[],
+  place: Place,
+  command: string,
+  inPlace: string | null = null,
+): string[] {
   return [
     ...summary.map(safeText),
     ...renderWarnings(place.warnings),
+    ...inPlaceLines(inPlace),
     `Resume: ${safeText(command)}`,
   ];
 }
@@ -79,14 +90,14 @@ export function renderListing(
   return lines;
 }
 
-export function renderLanding(result: LandingResult): string[] {
+export function renderLanding(result: LandingResult, inPlace: string | null = null): string[] {
   // The provenance summary is the landing's own three lines (FR-47, FR-48), and the
-  // Resume label is what the skill and the user parse (FR-61).
+  // Resume labels are what the skill and the user parse (FR-66).
   const lines = result.marker.lines.map(safeText);
   if (result.switched) {
     lines.push("Switched.");
   } else if (result.handover !== null) {
-    lines.push(`Resume: ${safeText(result.handover.command)}`);
+    lines.push(...inPlaceLines(inPlace), `Resume: ${safeText(result.handover.command)}`);
   }
   return lines;
 }

@@ -21,14 +21,20 @@ The lookup is global. An exact ID wins; a prefix of at least six characters sele
 exactly one matches; several matches are listed as candidates. A file path and a row number are also
 accepted.
 
-When the session belongs to the active Claude Code profile, the tool prints its native command and writes nothing:
+When the session belongs to the active Claude Code profile, the tool writes nothing and prints:
 
-```sh
-claude --resume <session-id>
+```text
+Resume in place: /resume <session-id>
+Resume: cd <dir> && claude --resume <session-id>
 ```
 
 When the session belongs to another agent or Claude Code profile, or `--to <dir>` is given, the tool shows an import preview
-and the exact `Confirm:` command. After the import it prints `Resume:` for the new session.
+and the exact `Confirm:` command. After the import it prints the same two lines for the new session.
+
+Type the `Resume in place:` command in the Claude Code session where you ran `/resume-from`. Claude
+Code opens the session there and moves to its directory. That process keeps its launch settings, so
+a wrapper such as `claude-work` or extra `--settings` stay in effect. The plugin does not start another
+Claude Code process. The `Resume:` line is for another terminal; it starts a bare `claude`.
 
 A missing recorded directory is shown first as `Recover:` git commands, gated by the same
 `Confirm:` token. Nothing is recreated without it.
@@ -77,8 +83,6 @@ The active `CLAUDE_CONFIG_DIR` is the import target. A personal session restored
 profile is imported into the work profile, not reopened in the personal one. Non-default profile
 homes remain explicit in the printed resume command.
 
-If your launcher supplies extra settings (for example, `claude-work`), use that same launcher with
-the new session ID. A profile home alone does not preserve launch-time provider settings.
-
-For agterm, the plugin wraps shell commands in `/bin/zsh -lc` and holds the pane open with
-`--wait` so an early error remains visible.
+If your launcher supplies extra settings (for example, `claude-work`) and you open the session from
+another terminal, use that same launcher with the new session ID. A profile home alone does not
+preserve launch-time provider settings. `Resume in place:` avoids this.

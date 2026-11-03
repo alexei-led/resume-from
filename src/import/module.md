@@ -338,6 +338,12 @@ interface AgentAdapter {
     prompt: string | null;
   }): string;
 
+  /**
+   * The command the user types inside the running agent to open one of its own sessions there,
+   * from any directory. Null when the agent has none, or when switchTo moves the user itself.
+   */
+  inPlaceCommand(sessionId: SessionId): string | null;
+
   /** Target role. Produces bytes only. It never creates a file (FR-49, FR-53). */
   serialize(
     session: CanonicalSession,
@@ -787,6 +793,8 @@ interface ImportPipeline {
   ): Promise<ImportDestination>;
   /** The source agent's native command that resumes the session in `directory` (FR-61). */
   resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string;
+  /** What the user types in the running agent to open the session there, or null (FR-66). */
+  inPlaceCommand(ref: SessionRef): string | null;
   /** The conversation an import into `target` would keep, as plain text lines (FR-61). */
   context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]>;
   /** Moves the user into an existing session of its own agent (FR-44, FR-61). */

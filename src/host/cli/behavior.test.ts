@@ -542,3 +542,73 @@ describe("T-CLI-23 a new numbered-list agent needs no change here", () => {
     expect(outcome.exitCode).toBe(0);
   });
 });
+
+describe("T-CLI-26 the in-place resume line", () => {
+  const IN_PLACE = "Resume in place:";
+
+  it.each(["claude-code", "codex"] as const)(
+    "names the landed session for %s's own /resume",
+    async (agent) => {
+      const { pipeline } = stubPipeline({
+        landing: landing({
+          ref: { agent, home: "/profiles/work", id: "landed-9" },
+          handover: { sessionId: "landed-9", command: "cd /work/app && agent resume landed-9" },
+        }),
+      });
+      const outcome = await createCliRunner().run(
+        invocation({ argv: ["1", "--confirm", CONFIRMATION_TOKEN], targetAgent: agent }),
+        pipeline,
+      );
+      expect(outcome.exitCode).toBe(0);
+      expect(outcome.stdout).toContain(`${IN_PLACE} /resume landed-9`);
+      expect(outcome.stdout).toContain("Resume: cd /work/app && agent resume landed-9");
+    },
+  );
+
+  it.each(["claude-code", "codex"] as const)(
+    "names the native session when it already belongs to the active %s profile",
+    async (agent) => {
+      const located = descriptor({
+        ref: { agent, home: "/profiles/work", id: "native-4" },
+        startDirectory: "/work/app",
+        repoPath: "/work/app",
+      });
+      const { pipeline, calls } = stubPipeline({
+        located,
+        place: presentPlace({ directory: "/work/app", branch: "main" }),
+      });
+      const outcome = await createCliRunner().run(
+        invocation({ argv: [located.ref.id], targetAgent: agent, targetHome: "/profiles/work" }),
+        pipeline,
+      );
+      expect(outcome.stdout).toContain(`${IN_PLACE} /resume native-4`);
+      expect(calls.commit).toHaveLength(0);
+    },
+  );
+
+  it("prints no in-place line in a bare shell, which has no agent to resume in", async () => {
+    const located = descriptor({
+      ref: { agent: "codex", home: "/Users/me/.codex", id: "native-5" },
+      startDirectory: "/work/app",
+      repoPath: "/work/app",
+    });
+    const { pipeline } = stubPipeline({ located });
+    const outcome = await createCliRunner(null).run(
+      invocation({ argv: [located.ref.id], targetAgent: null }),
+      pipeline,
+    );
+    expect(outcome.stdout.join("\n")).toContain("Resume:");
+    expect(outcome.stdout.join("\n")).not.toContain(IN_PLACE);
+  });
+
+  it("prints no in-place line for a host without a resume command of its own", async () => {
+    const { pipeline } = stubPipeline({
+      landing: landing({ ref: { agent: "pi", home: "/Users/me/.pi", id: "landed-pi" } }),
+    });
+    const outcome = await createCliRunner().run(
+      invocation({ argv: ["1", "--confirm", CONFIRMATION_TOKEN], targetAgent: "pi" }),
+      pipeline,
+    );
+    expect(outcome.stdout.join("\n")).not.toContain(IN_PLACE);
+  });
+});

@@ -398,10 +398,13 @@ that time.
 
 **FR-43** — The tool uses the highest level that the adapter declares.
 
-**FR-44** — In Pi, the tool creates the session and moves the user into it.
+**FR-44** — In Pi, the tool creates the session and moves the user into it, from any directory: Pi
+rebuilds its runtime for the session's directory.
 
 **FR-45** — When the adapter cannot switch, the tool states the session ID and the command that
-opens it.
+opens it. Inside Claude Code or Codex it also states the agent's own `/resume <id>`, which opens
+the session in the running agent from any directory and keeps that agent's launch settings. The
+tool does not start another agent process.
 
 **FR-46** — After the landing, the agent waits. It sends no message and runs no tool.
 
@@ -516,10 +519,12 @@ any existing checkout is allowed with a warning.
 `--prompt <text>` appends the text, shell-quoted, as the initial prompt of the native resume command.
 `--context` is read-only: it prints the summary and the budgeted conversation an import into the
 current agent would keep, then a final `Directory: <dir>` line. Pi switches in process to the
-original session when a native restore targets Pi's current directory; otherwise it shows the
-command.
+original session from any directory; a declined or failed switch shows the command.
 
-**FR-66** — Restore output uses stable labels: `Resume:`, `Recover:`, `Confirm:` and `Directory:`.
+**FR-66** — Restore output uses stable labels: `Resume in place:`, `Resume:`, `Recover:`, `Confirm:`
+and `Directory:`. `Resume in place:` is printed inside an agent whose adapter has an in-agent
+resume command, for the session to open: the landed import, or the native session of the active
+profile.
 Native output starts with two summary lines naming the agent, id prefix, home, time, title,
 directory, branch, and any state note. An import landing prints a three-line provenance summary:
 where it came from, where it now lives, and the kept and dropped counts. Claude Code stores that
