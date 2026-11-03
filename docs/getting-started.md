@@ -39,7 +39,8 @@ The Codex prompt uses a pinned package through `npx`. Its first use needs access
 The lookup is global: it is not filtered by the current repository, so a session recorded in a
 removed worktree is still found. Matching is case-insensitive. An exact ID wins; a prefix of at least
 six characters selects the session when exactly one matches, and several matches are listed as
-candidates. You can also pass a session file path or a row number from the list.
+candidates. You can also pass a session file path. Row numbers come from the list in Claude Code,
+Codex, and the CLI; Pi uses its session picker.
 
 The tool prints a two-line summary, any warnings, and then:
 
@@ -50,6 +51,9 @@ Same agent: run `Resume:`. Another agent: confirm the import; the new native ses
 three-line recovery summary.
 
 ## 3. Options
+
+These apply to the CLI, Claude Code, and Codex; Pi accepts a selector only and confirms imports with
+its own `Import this session? (y/N)` dialog.
 
 ```text
 /resume-from <id> --to <existing-checkout>     # import into another checkout of the same repository

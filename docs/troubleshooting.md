@@ -68,7 +68,8 @@ To import from a shell:
 resume-from --target-agent codex --
 ```
 
-Everything after `--` is the selection: a row number, session ID, or file path.
+Everything after `--` is the selection: a row number, session ID, or file path. A printed
+`Confirm:` line repeats this prefix, so it can be pasted into the same shell.
 
 ## Codex cannot reach npm
 

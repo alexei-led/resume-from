@@ -23,8 +23,8 @@ The lookup is global. An exact ID wins; a prefix of at least six characters sele
 exactly one matches; several matches are listed as candidates. A session file path is also accepted.
 
 A Pi session whose directory is Pi's current directory is switched to in process, using the original
-file: no copy, no confirmation. A session from another directory, or another agent, prints `Resume:`
-or shows an import preview ending in `Confirm:`.
+file: no copy, no confirmation. A session from another directory, or another agent, prints `Resume:`.
+A Pi import shows the preview and then asks `Import this session? (y/N)` before writing anything.
 
 ## Import with the picker
 
@@ -49,13 +49,9 @@ the collapsed view shows the first line:
 
 ## Options
 
-```text
-/resume-from <id> --to <existing-checkout>
-/resume-from <id> --prompt "continue the refactor"
-/resume-from <id> --context
-```
-
-`--context` is read-only and prints the conversation an import into Pi would keep.
+Pi accepts the selector only: `/resume-from <id-or-prefix>` or `/resume-from <file-path>`. Row
+numbers, `--to`, `--prompt`, and `--context` belong to the CLI, Claude Code, and Codex entry points;
+run `resume-from --help` for those.
 
 ## Show command help
 

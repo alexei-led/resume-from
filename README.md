@@ -125,8 +125,8 @@ npm registry access.
 ```
 
 An exact ID wins. A prefix of at least six characters selects the session when exactly one matches;
-several matches are listed as candidates. You can also pass a session file path or a row number from
-the list.
+several matches are listed as candidates. You can also pass a session file path. Row numbers come
+from the list in Claude Code, Codex, and the CLI; Pi uses its session picker.
 
 The tool prints a short summary:
 
@@ -138,9 +138,10 @@ Resume: cd /Users/alexei/.local/share/chezmoi && claude --resume dc601a22-64e3-4
 
 Same agent: run that `Resume:` line. Different agent: the tool shows an import preview and the exact
 `Confirm:` command to re-run. A missing recorded directory is shown first as one or more `Recover:`
-git commands, also gated by `Confirm:`.
+git commands, also gated by `Confirm:`. Pi uses its own interactive `Import this session? (y/N)`
+confirmation instead of a `Confirm:` line.
 
-Options:
+Options in the CLI, Claude Code, and Codex (Pi accepts a selector only):
 
 - `--to <dir>` imports into another existing checkout of the same repository.
 - `--prompt <text>` appends an initial prompt to the native resume command.

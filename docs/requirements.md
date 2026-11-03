@@ -522,7 +522,9 @@ where it came from, where it now lives, and the kept and dropped counts. Claude 
 summary in one `system` entry (subtype `informational`, level `info`, `isMeta` false), rendered gray;
 Pi stores one `custom` entry rendered dim, with the collapsed view showing its first line; Codex
 prints it. Imported Claude Code assistant turns declare the model `<synthetic>` so a resume shows no
-restore notice. Displayed text is sanitised.
+restore notice. A `Confirm:` re-run uses the host's `/resume-from` in plugin mode and a runnable
+`resume-from …` shell command otherwise; a manual shell invocation that passed `--target-agent`
+repeats that flag and its `--` delimiter. Displayed text is sanitised.
 
 ---
 
