@@ -181,7 +181,7 @@ export function isArchivedRolloutFileName(name: string): boolean {
 /** The exact thread id encoded after Codex's fixed timestamp prefix. */
 export function sessionIdFromRolloutFileName(name: string): string | null {
   const base = name.endsWith(ARCHIVED_SESSION_SUFFIX)
-    ? name.slice(0, -ARCHIVED_SESSION_SUFFIX.length) + ".jsonl"
+    ? `${name.slice(0, -ARCHIVED_SESSION_SUFFIX.length)}.jsonl`
     : name;
   const match = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/.exec(base);
   return match?.[1] ?? null;

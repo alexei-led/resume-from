@@ -17,8 +17,13 @@ and pipeline results into text.
 
 ## Functional Responsibilities
 
-- Parse the invocation: no argument, a row number, a session ID, a file path, an agent name, a home
-  path (FR-2, FR-10, FR-12, FR-15).
+- Parse the invocation: no argument, a row number, an ID or prefix, a file path, an agent name, a
+  home path, `--to`, `--prompt` and `--context` (FR-2, FR-10, FR-12, FR-15, FR-61).
+- A bare shell (no target agent) never imports: it lists, looks up and prints the source agent's
+  native `Resume:` command (FR-61).
+- Restore a located session: print its summary, place it, gate any recovery on its token, then
+  resume natively or show the import preview (FR-61).
+- Print the stable labels the skill parses: `Resume:`, `Recover:`, `Confirm:` and `Directory:`.
 - With no selection: print the numbered list — agent, home, time, title, turn count — newest first
   (FR-11, FR-14), and print skipped entries (homes or sessions) with their diagnostics.
 - With a selection and no confirmation: print the preview exactly as `PreviewReport.lines` gives it
@@ -232,7 +237,8 @@ interface LandingResult {
 interface ListRequest {
   /** Host-supplied absolute working directory; preserve native subdirectory and symlink spelling. */
   destinationCwd: string;
-  target: TargetProfile;
+  /** Null in a bare shell, where listing needs no target agent (FR-61). */
+  target: TargetProfile | null;
   onlyAgent: AgentId | null;
   onlyHome: HomePath | null;
 }
@@ -243,6 +249,13 @@ interface ImportRequest {
   destinationCwd: string;
   target: TargetProfile;
   selection: SelectionInput;
+  /**
+   * Set when the session was already located. Discovery then uses this descriptor instead of
+   * listing or parsing any home again (FR-61).
+   */
+  located?: SessionDescriptor | null;
+  /** The initial prompt appended to the resumed session, when the host asked for one (FR-61). */
+  prompt?: string | null;
   onlyAgent: AgentId | null;
   onlyHome: HomePath | null;
 }
@@ -250,7 +263,10 @@ interface ImportRequest {
 
 <!-- contract: ImportPipeline — restated from src/import/module.md -->
 ```ts
-/** One import, from listing to landing. Every host drives these three calls. */
+/**
+ * One import, from listing to landing, plus the restore operations an identifier flow needs.
+ * Every host drives these calls; none of the stages behind them is exported (FR-60).
+ */
 interface ImportPipeline {
   list(request: ListRequest): Promise<Listing>;
   /** Writes nothing (FR-16). */
@@ -261,6 +277,23 @@ interface ImportPipeline {
     runtime: AgentRuntime,
     confirmationToken: string,
   ): Promise<LandingResult>;
+
+  /** Resolves a row, ID/prefix or path; an ID or path is not filtered by repository (FR-61). */
+  locate(request: LocateRequest): Promise<SessionDescriptor>;
+  /** Where the session's recorded directory is, and how it could be recreated (FR-61). */
+  place(descriptor: SessionDescriptor): Promise<Place>;
+  /** Binds the session file, directory and recovery argv into a token (FR-61). */
+  recoveryToken(descriptor: SessionDescriptor, place: Place): string | null;
+  /** Runs the recovery only when the token matches. A mismatch runs nothing (FR-61). */
+  recover(descriptor: SessionDescriptor, place: Place, token: string): Promise<RecoveryResult>;
+  /** The directory an import records: the session directory, or the --to override (FR-61). */
+  destinationFor(descriptor: SessionDescriptor, to: string | null): Promise<ImportDestination>;
+  /** The source agent's native command that resumes the session in `directory` (FR-61). */
+  resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string;
+  /** The conversation an import into `target` would keep, as plain text lines (FR-61). */
+  context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]>;
+  /** Moves the user into an existing session of its own agent (FR-44, FR-61). */
+  switchTo(descriptor: SessionDescriptor, runtime: AgentRuntime): Promise<SwitchOutcome>;
 }
 ```
 
@@ -273,8 +306,11 @@ interface CliInvocation {
   argv: string[];
   /** The directory the agent is running in. Used to find the repository (FR-13). */
   cwd: string;
-  /** The agent the binary is running inside. The shim states it; the binary never guesses. */
-  targetAgent: AgentId;
+  /**
+   * The agent the binary is running inside. The shim states it; the binary never guesses.
+   * Null in a bare shell, where no agent is hosting the command (FR-61).
+   */
+  targetAgent: AgentId | null;
   /** The target home, when the shim knows it. Otherwise the adapter default is used (FR-3). */
   targetHome: HomePath | null;
 }

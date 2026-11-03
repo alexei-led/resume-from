@@ -15,7 +15,7 @@
 
 import { createImportPipeline } from "../import/index.js";
 import { createConfigLoader } from "../platform/config/index.js";
-import { createRepoReader } from "../platform/repo/index.js";
+import { createRepoReader, createWorktreeRecovery } from "../platform/repo/index.js";
 import { createFileCommitter } from "../platform/store/index.js";
 import { estimatorFactory } from "../platform/tokens/index.js";
 import { AGENTS, type AgentEntry } from "./agents.js";
@@ -33,6 +33,7 @@ import type {
   RepoReader,
   TargetProfile,
   TargetProfileBuilder,
+  WorktreeRecovery,
 } from "./contract.js";
 import { createTargetProfileBuilder } from "./profile.js";
 import { createAgentRegistry } from "./registry.js";
@@ -47,6 +48,7 @@ export interface HostDeps {
   configLoader?: ConfigLoader;
   createEstimators?: () => EstimatorFactory;
   createRepo?: () => RepoReader;
+  createRecovery?: () => WorktreeRecovery;
   createCommitter?: () => FileCommitter;
   /** Host invocation directory. Each pipeline request independently supplies its destination. */
   cwd?: string;
@@ -64,6 +66,8 @@ export interface Host extends HostWiring {
   /** The one configuration of this process (Constraints: loaded once per process). */
   config(): ImportConfig;
   pipelineFor(target: TargetProfile): Promise<ImportPipeline>;
+  /** A pipeline for operations that need no target: list, locate and native resume (FR-61). */
+  pipelineForListing(): Promise<ImportPipeline>;
 }
 
 export async function createHost(deps: HostDeps = {}): Promise<Host> {
@@ -73,6 +77,7 @@ export async function createHost(deps: HostDeps = {}): Promise<Host> {
   // Step 2.
   const estimators = (deps.createEstimators ?? (() => estimatorFactory))();
   const repo = (deps.createRepo ?? createRepoReader)();
+  const recovery = (deps.createRecovery ?? (() => createWorktreeRecovery()))();
   const committer = (deps.createCommitter ?? createFileCommitter)();
 
   // Step 3. The list is the only place that knows which implementations exist. Each adapter
@@ -87,6 +92,18 @@ export async function createHost(deps: HostDeps = {}): Promise<Host> {
 
   const registry = createAgentRegistry(adapters);
   const profiles = createTargetProfileBuilder(registry);
+
+  // One construction for both entry points: the only difference is the estimator family.
+  const buildPipeline = (family: EstimatorFamily): ImportPipeline =>
+    createImportPipeline({
+      adapters,
+      config,
+      estimator: estimators.forFamily(family),
+      committer,
+      repo,
+      recovery,
+      ...(deps.now === undefined ? {} : { now: deps.now }),
+    });
 
   return {
     registry: () => registry,
@@ -103,14 +120,13 @@ export async function createHost(deps: HostDeps = {}): Promise<Host> {
             "Run the import from an agent whose adapter has that role.",
         );
       }
-      return createImportPipeline({
-        adapters,
-        config,
-        estimator: estimators.forFamily(families.get(target.agent) ?? "generic"),
-        committer,
-        repo,
-        ...(deps.now === undefined ? {} : { now: deps.now }),
-      });
+      return buildPipeline(families.get(target.agent) ?? "generic");
+    },
+
+    // The list, lookup and native resume need no target. Building them with the generic
+    // estimator keeps a bare shell free of an agent it never uses (FR-61).
+    async pipelineForListing(): Promise<ImportPipeline> {
+      return buildPipeline("generic");
     },
   };
 }

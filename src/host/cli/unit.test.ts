@@ -224,6 +224,6 @@ describe("T-CLI-24 the shim home is resolved before reaching the pipeline", () =
       pipeline,
     );
 
-    expect(calls.list[0]?.target.home).toBe(resolvedHome);
+    expect(calls.list[0]?.target?.home).toBe(resolvedHome);
   });
 });

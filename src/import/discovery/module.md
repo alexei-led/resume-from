@@ -358,6 +358,11 @@ interface SessionFinder {
     input: SelectionInput,
     destination?: DiscoveryDestination,
   ): Promise<SessionDescriptor>;
+  /**
+   * True when one of the session's recorded directories belongs to the repository at
+   * `directory`, using the same membership rule as listing (FR-13, FR-61).
+   */
+  belongs(descriptor: SessionDescriptor, directory: string): Promise<boolean>;
   /** Reads one session into the neutral vocabulary, through its source adapter. */
   load(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 }
@@ -366,10 +371,19 @@ interface SessionFinder {
 ```ts
 /** Finds one session anywhere on disk, without the repository filter (FR-61). */
 interface SessionLocator {
-  /** Resolves a case-insensitive exact ID, or a prefix of at least six characters. */
-  byId(query: string): Promise<SessionDescriptor>;
+  /**
+   * Resolves a case-insensitive exact ID, or a prefix of at least six characters.
+   * `accept` narrows the candidates before ambiguity is decided.
+   */
+  byId(
+    query: string,
+    accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
+  ): Promise<SessionDescriptor>;
   /** Describes one session file directly (FR-12). */
-  byPath(filePath: string): Promise<SessionDescriptor>;
+  byPath(
+    filePath: string,
+    accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
+  ): Promise<SessionDescriptor>;
   /** Every search root, fully resolved, in the order a lookup visits them. */
   roots(): Promise<string[]>;
 }

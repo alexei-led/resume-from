@@ -7,7 +7,7 @@ vi.mock("resume-from", () => ({ activatePiExtension }));
 type EntryRenderer = (
   entry: { data?: unknown },
   options: { expanded: boolean },
-  theme: { bg(name: string, text: string): string },
+  theme: { fg(name: string, text: string): string },
 ) => { render(width: number): string[]; invalidate(): void };
 type ShimFactory = (pi: {
   registerEntryRenderer(customType: string, renderer: EntryRenderer): void;
@@ -67,14 +67,14 @@ describe("Pi package shim provenance", () => {
     const component = renderer?.(
       { data: { lines: ["Imported from pi", "Source session: source-1", "Dropped: 57"] } },
       { expanded: false },
-      { bg: (_name, text) => text },
+      { fg: (_name, text) => text },
     );
     expect(component?.render(80)).toEqual(["Imported from pi · Dropped: 57"]);
 
     const expanded = renderer?.(
       { data: { lines: ["Imported from pi", "Source session: source-1", "Dropped: 57"] } },
       { expanded: true },
-      { bg: (_name, text) => text },
+      { fg: (_name, text) => text },
     );
     expect(expanded?.render(80)).toEqual([
       "Imported from pi",
@@ -85,7 +85,7 @@ describe("Pi package shim provenance", () => {
     const unsafe = renderer?.(
       { data: { lines: ["Imported from pi\u001b[31m", "Dropped: 57"] } },
       { expanded: true },
-      { bg: (_name, text) => text },
+      { fg: (_name, text) => text },
     );
     expect(unsafe?.render(80)[0]).toBe("Imported from pi ");
     expect(unsafe?.render(10)).toEqual(["Imported f\u001b[0m", "Dropped: 5\u001b[0m"]);
@@ -93,7 +93,7 @@ describe("Pi package shim provenance", () => {
     const wide = renderer?.(
       { data: { lines: ["界界界界界", "Dropped: 57"] } },
       { expanded: true },
-      { bg: (_name, text) => text },
+      { fg: (_name, text) => text },
     );
     expect(wide?.render(5)).toEqual(["界界\u001b[0m", "Dropp\u001b[0m"]);
   });
@@ -125,7 +125,7 @@ describe("Pi package shim command boundary", () => {
         switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
       };
 
-      await handler(" sessions/my session.jsonl ", context);
+      await handler(" 'sessions/my session.jsonl' ", context);
 
       const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
       expect(activation?.home).toMatch(/\/relative-pi-home$/);

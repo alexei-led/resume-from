@@ -6,15 +6,19 @@ import type {
   AgentRuntime,
   HandoverInstruction,
   HomeFailure,
+  ImportDestination,
   ImportPipeline,
   ImportRequest,
   LandingResult,
   Listing,
   ListRequest,
+  Place,
   PreviewReport,
   PreviewWarning,
+  RecoveryResult,
   SelectionError,
   SelectionInput,
+  SwitchOutcome,
   WarningKind,
 } from "../../import/contract.js";
 
@@ -22,15 +26,19 @@ export type {
   AgentRuntime,
   HandoverInstruction,
   HomeFailure,
+  ImportDestination,
   ImportPipeline,
   ImportRequest,
   LandingResult,
   Listing,
   ListRequest,
+  Place,
   PreviewReport,
   PreviewWarning,
+  RecoveryResult,
   SelectionError,
   SelectionInput,
+  SwitchOutcome,
   WarningKind,
 };
 
@@ -60,8 +68,11 @@ export interface CliInvocation {
   argv: string[];
   /** The directory the agent is running in. Used to find the repository (FR-13). */
   cwd: string;
-  /** The agent the binary is running inside. The shim states it; the binary never guesses. */
-  targetAgent: AgentId;
+  /**
+   * The agent the binary is running inside. The shim states it; the binary never guesses.
+   * Null in a bare shell, where no agent is hosting the command (FR-61).
+   */
+  targetAgent: AgentId | null;
   /** The target home, when the shim knows it. Otherwise the adapter default is used (FR-3). */
   targetHome: HomePath | null;
 }

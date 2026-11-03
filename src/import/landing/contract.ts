@@ -132,5 +132,6 @@ export interface SessionLander {
     runtime: AgentRuntime,
     importedAt: string,
     context: SerializationContext,
+    prompt?: string | null,
   ): Promise<LandingResult>;
 }

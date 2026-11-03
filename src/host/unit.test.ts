@@ -179,6 +179,16 @@ describe("the target profile", () => {
       },
       preview: () => Promise.reject(new Error("not called")),
       commit: () => Promise.reject(new Error("not called")),
+      locate: () => Promise.reject(new Error("not called")),
+      place: () => Promise.reject(new Error("not called")),
+      recoveryToken: () => null,
+      recover: () => Promise.reject(new Error("not called")),
+      destinationFor: () => Promise.reject(new Error("not called")),
+      resumeCommand: () => {
+        throw new Error("not called");
+      },
+      context: () => Promise.reject(new Error("not called")),
+      switchTo: () => Promise.reject(new Error("not called")),
     };
 
     await createCliRunner(profile).run(
@@ -191,6 +201,6 @@ describe("the target profile", () => {
       pipeline,
     );
 
-    expect(listed[0]?.target.home).toBe(join(homedir(), "alt-home"));
+    expect(listed[0]?.target?.home).toBe(join(homedir(), "alt-home"));
   });
 });

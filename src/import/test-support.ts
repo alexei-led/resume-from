@@ -22,7 +22,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REFERENCE_SESSION } from "../../test/fixtures/reference-session.js";
-import type { CommitDistance, RepoIdentity, RepoReader } from "../platform/repo/contract.js";
+import type {
+  CommitDistance,
+  Place,
+  RecoveryResult,
+  RepoIdentity,
+  RepoReader,
+  WorktreeRecovery,
+} from "../platform/repo/contract.js";
 import type {
   AgentAdapter,
   AgentCapabilities,
@@ -84,6 +91,27 @@ export const charEstimator: TokenEstimator = {
 /** Half a token per character, so the same session costs a different number of tokens. */
 export const halfEstimator: TokenEstimator = {
   estimate: (text) => Math.ceil(text.length / 2),
+};
+
+/** A recovery that never writes: the pipeline tests that locate do not recreate anything. */
+export const inertRecovery: WorktreeRecovery = {
+  checkCancellation() {},
+  place: async (request) =>
+    ({
+      state: "present",
+      directory: request.directory,
+      branch: request.branch,
+      warnings: [],
+      recovery: null,
+      reason: null,
+    }) satisfies Place,
+  recover: async (): Promise<RecoveryResult> => ({
+    ok: false,
+    failedCommand: null,
+    stdout: "",
+    stderr: "",
+    message: "no recovery in a unit test",
+  }),
 };
 
 export function defaultConfig(overrides: Partial<ImportConfig> = {}): ImportConfig {
@@ -625,11 +653,28 @@ export function recordingStages(overrides: Partial<PipelineStages> = {}): StageR
         calls.push("finder.resolve");
         return descriptor;
       },
+      async belongs() {
+        return true;
+      },
       async load() {
         calls.push("finder.load");
         return session;
       },
     },
+    locator: {
+      async byId() {
+        calls.push("locator.byId");
+        return descriptor;
+      },
+      async byPath() {
+        calls.push("locator.byPath");
+        return descriptor;
+      },
+      async roots() {
+        return [];
+      },
+    },
+    recovery: inertRecovery,
     rules: {
       apply(loaded: CanonicalSession, target: TargetProfile): TransferPlan {
         calls.push("rules.apply");
@@ -707,9 +752,9 @@ export function recordingStages(overrides: Partial<PipelineStages> = {}): StageR
 /** Wraps a lander so a test can see the plan the pipeline handed it. */
 export function recordingLander(inner: SessionLander, seen: TransferPlan[]): SessionLander {
   return {
-    land: (plan, adapter, committer, runtime, importedAt, context) => {
+    land: (plan, adapter, committer, runtime, importedAt, context, prompt) => {
       seen.push(plan);
-      return inner.land(plan, adapter, committer, runtime, importedAt, context);
+      return inner.land(plan, adapter, committer, runtime, importedAt, context, prompt);
     },
   };
 }
@@ -818,6 +863,7 @@ export function worldDeps(
     estimator: charEstimator,
     committer: createTestCommitter(),
     repo: createStaticRepoReader(),
+    recovery: inertRecovery,
     now: () => "2026-08-05T00:00:00.000Z",
     ...overrides,
   };
@@ -849,6 +895,10 @@ export function instrument(deps: ImportPipelineDeps): Instrumented {
         order.push("finder.resolve");
         return stages.finder.resolve(scope, input, destination);
       },
+      belongs: (descriptor, directory) => {
+        order.push("finder.belongs");
+        return stages.finder.belongs(descriptor, directory);
+      },
       load: (descriptor) => {
         order.push("finder.load");
         return stages.finder.load(descriptor);
@@ -874,9 +924,9 @@ export function instrument(deps: ImportPipelineDeps): Instrumented {
     },
     lander: recordingLander(
       {
-        land: (plan, adapter, committer, runtime, importedAt, context) => {
+        land: (plan, adapter, committer, runtime, importedAt, context, prompt) => {
           order.push("lander.land");
-          return stages.lander.land(plan, adapter, committer, runtime, importedAt, context);
+          return stages.lander.land(plan, adapter, committer, runtime, importedAt, context, prompt);
         },
       },
       landed,

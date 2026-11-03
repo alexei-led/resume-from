@@ -3,7 +3,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { AgentId, ImportRequest, ListRequest } from "./contract.js";
+import type { AgentId, ImportRequest } from "./contract.js";
 import { ImportFailure } from "./errors.js";
 import {
   AGENTS,
@@ -36,7 +36,7 @@ async function newWorld(...args: Parameters<typeof createWorld>): Promise<World>
   return world;
 }
 
-function listRequest(world: World, target: AgentId): ListRequest {
+function listRequest(world: World, target: AgentId) {
   return {
     destinationCwd: world.repoRoot,
     target: world.targetFor(target),

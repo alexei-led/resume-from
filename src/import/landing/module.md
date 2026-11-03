@@ -374,11 +374,15 @@ interface AgentAdapter {
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
   readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
 
-  /** Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44). */
+  /**
+   * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).
+   * `filePath` names an existing session file when the host already holds it (FR-61).
+   */
   switchTo(
     home: HomePath,
     sessionId: SessionId,
     runtime: AgentRuntime,
+    filePath?: string | null,
   ): Promise<SwitchOutcome>;
 }
 ```
@@ -434,6 +438,7 @@ interface SessionLander {
     runtime: AgentRuntime,
     importedAt: string,
     context: SerializationContext,
+    prompt?: string | null,
   ): Promise<LandingResult>;
 }
 ```

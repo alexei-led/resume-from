@@ -1,7 +1,7 @@
 // T-IMP-1 to T-IMP-6: which stage runs when, and which adapter each stage is given.
 
 import { afterEach, describe, expect, it } from "vitest";
-import type { AgentId, ImportRequest, ListRequest } from "./contract.js";
+import type { AgentId, ImportRequest } from "./contract.js";
 import { createPipelineFromStages } from "./pipeline.js";
 import {
   AGENTS,
@@ -28,7 +28,7 @@ async function newWorld(...args: Parameters<typeof createWorld>): Promise<World>
   return world;
 }
 
-function listRequest(world: World, target: AgentId): ListRequest {
+function listRequest(world: World, target: AgentId) {
   return {
     destinationCwd: world.repoRoot,
     target: world.targetFor(target),

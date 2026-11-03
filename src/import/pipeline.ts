@@ -2,20 +2,29 @@
 // Nothing here knows an agent: the source adapter comes from the chosen session and the
 // target adapter from the target profile (FR-6, FR-60).
 
-import type { RepoIdentity } from "../platform/repo/contract.js";
-import { confirmationMatches, confirmationToken } from "./confirmation.js";
+import { resolve } from "node:path";
+import type {
+  Place,
+  RecoveryResult,
+  RecoverySteps,
+  RepoIdentity,
+  WorktreeRecovery,
+} from "../platform/repo/contract.js";
+import { confirmationToken, recoveryToken, tokenMatches } from "./confirmation.js";
 import type {
   AgentAdapter,
   AgentRuntime,
   CanonicalSession,
   FileCommitter,
   ImportConfig,
+  ImportDestination,
   ImportPipeline,
   ImportRequest,
   LandingError,
   LandingResult,
   Listing,
   ListRequest,
+  LocateRequest,
   PreviewBuilder,
   PreviewContent,
   PreviewReport,
@@ -23,11 +32,13 @@ import type {
   SessionDescriptor,
   SessionFinder,
   SessionLander,
+  SessionLocator,
   TargetProfile,
   TokenEstimator,
   TransferPlan,
   TransferRules,
 } from "./contract.js";
+import { canonicalPath, isDirectory } from "./discovery/index.js";
 import { ImportFailure, reasonOf } from "./errors.js";
 
 /** The role a target adapter must declare to receive an import (FR-59). */
@@ -48,6 +59,10 @@ export interface PipelineStages {
   /** Observe the repository reader's cancellation even when no Git lookup is needed. */
   checkCancellation(): void;
   finder: SessionFinder;
+  /** Global lookup shared by the identifier flow (FR-61). */
+  locator: SessionLocator;
+  /** Plans and runs the one recovery this tool may perform (FR-61). */
+  recovery: WorktreeRecovery;
   rules: TransferRules;
   /** Resolve fresh destination facts, without replacing the host's native cwd spelling. */
   destinationFor(cwd: string): Promise<DestinationContext>;
@@ -125,10 +140,12 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
     }
   }
 
-  async function resolve(
+  async function resolveSession(
     request: ImportRequest,
     destination: DestinationContext,
   ): Promise<SessionDescriptor> {
+    // A located descriptor is already read: discovery must not list or parse a home again (FR-61).
+    if (request.located !== undefined && request.located !== null) return request.located;
     try {
       return await stages.finder.resolve(scopeOf(request), request.selection, destination);
     } catch (cause) {
@@ -150,6 +167,42 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
     }
   }
 
+  /** The one adapter that reads this session's agent (FR-59, FR-60). */
+  function sourceAdapter(agent: SessionDescriptor["ref"]["agent"]): AgentAdapter {
+    const adapter = stages.adapters.find((candidate) => {
+      const capabilities = candidate.capabilities();
+      return capabilities.agent === agent && capabilities.roles.includes("source");
+    });
+    if (adapter === undefined) {
+      throw new ImportFailure(
+        "discovery",
+        `There is no adapter that can read a "${agent}" session, so nothing was done.`,
+      );
+    }
+    return adapter;
+  }
+
+  /** The token that binds one recovery plan, or null when there is nothing to recover. */
+  function recoveryPlanToken(descriptor: SessionDescriptor, place: Place): string | null {
+    return place.state === "recoverable" && place.recovery !== null
+      ? recoveryToken(descriptor, place.recovery)
+      : null;
+  }
+
+  /** One plain-text line per kept turn, the form `--context` prints (FR-61). */
+  function turnLine(turn: CanonicalSession["turns"][number]): string {
+    if (turn.kind === "tool-call" && turn.toolCall !== null) {
+      return `Tool: ${turn.toolCall.toolName}(${turn.toolCall.argumentsText}) → ${turn.toolCall.outcomeLine}`;
+    }
+    if (turn.kind === "summary") return `Summary: ${turn.text}`;
+    return turn.role === "user" ? `User: ${turn.text}` : `Agent: ${turn.text}`;
+  }
+
+  /** Throws the one error shape a host prints when a destination cannot be used. */
+  function destinationFailure(message: string): ImportFailure {
+    return new ImportFailure("discovery", message);
+  }
+
   /**
    * Resolve, load, apply the rules, build the report. `commit` runs exactly this again
    * rather than taking a plan from the host: the numbered-list hosts of FR-10 are separate
@@ -157,7 +210,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
    */
   async function compute(request: ImportRequest): Promise<Computed> {
     const destination = await destinationFor(request.destinationCwd);
-    const descriptor = await resolve(request, destination);
+    const descriptor = await resolveSession(request, destination);
     const session = await load(descriptor);
 
     let plan: TransferPlan;
@@ -225,7 +278,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
       const adapter = targetAdapter(stages.adapters, request.target);
       const { descriptor, destination, plan, report } = await compute(request);
 
-      if (!confirmationMatches(report.confirmationToken, suppliedToken)) {
+      if (!tokenMatches(report.confirmationToken, suppliedToken)) {
         throw new ImportFailure(
           "confirmation",
           `The source session, destination, or preview changed after confirmation. Nothing was written to ${request.target.home}. ${PREVIEW_AGAIN}`,
@@ -260,6 +313,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
           runtime,
           stages.now(),
           destination,
+          request.prompt ?? null,
         );
       } catch (cause) {
         // The landing states what failed and what to do next for every one of its stages;
@@ -273,6 +327,158 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
           defects: known ? cause.defects : [],
         });
       }
+    },
+
+    async locate(request: LocateRequest): Promise<SessionDescriptor> {
+      const scope: SearchScope = {
+        repoRoot: request.cwd,
+        onlyAgent: request.onlyAgent,
+        onlyHome: request.onlyHome,
+      };
+      if (request.selection.by === "row") {
+        return await stages.finder.resolve(scope, request.selection);
+      }
+
+      // An ID or a path is global: the agent is decided by the root that holds the file (FR-61).
+      const home = request.onlyHome === null ? null : await canonicalPath(request.onlyHome);
+      const accept = async (descriptor: SessionDescriptor): Promise<boolean> => {
+        if (request.onlyAgent !== null && descriptor.ref.agent !== request.onlyAgent) return false;
+        return home === null || (await canonicalPath(descriptor.ref.home)) === home;
+      };
+      return request.selection.by === "session-id"
+        ? await stages.locator.byId(request.selection.id, accept)
+        : await stages.locator.byPath(request.selection.path, accept);
+    },
+
+    async place(descriptor: SessionDescriptor): Promise<Place> {
+      stages.checkCancellation();
+      const directory = descriptor.startDirectory ?? descriptor.repoPath;
+      if (directory === null) {
+        return {
+          state: "unrecoverable",
+          directory: "",
+          branch: null,
+          warnings: [],
+          recovery: null,
+          reason: "the session records no directory",
+        };
+      }
+      // The branch and commit a recovery may use are recorded in the conversation, not the row.
+      const session = await load(descriptor);
+      const place = await stages.recovery.place({
+        directory,
+        branch: session.provenance.repo.branch,
+        commit: session.provenance.repo.commit,
+      });
+      stages.checkCancellation();
+      return place;
+    },
+
+    recoveryToken(descriptor: SessionDescriptor, place: Place): string | null {
+      return recoveryPlanToken(descriptor, place);
+    },
+
+    async recover(
+      descriptor: SessionDescriptor,
+      place: Place,
+      token: string,
+    ): Promise<RecoveryResult> {
+      const expected = recoveryPlanToken(descriptor, place);
+      if (expected === null) {
+        return {
+          ok: false,
+          failedCommand: null,
+          stdout: "",
+          stderr: "",
+          message: "this session's directory needs no recovery",
+        };
+      }
+      if (!tokenMatches(expected, token)) {
+        return {
+          ok: false,
+          failedCommand: null,
+          stdout: "",
+          stderr: "",
+          message:
+            "the confirmation token does not match this recovery, so nothing was run. Run the exact Confirm: command shown by the preview.",
+        };
+      }
+      return await stages.recovery.recover(place.recovery as RecoverySteps);
+    },
+
+    async destinationFor(
+      descriptor: SessionDescriptor,
+      to: string | null,
+    ): Promise<ImportDestination> {
+      const recorded = descriptor.startDirectory ?? descriptor.repoPath;
+      if (to === null) {
+        if (recorded === null) {
+          throw destinationFailure(
+            `The session ${descriptor.ref.id} records no directory, so there is nowhere to import it. Pass --to <dir> to name an existing checkout.`,
+          );
+        }
+        return { directory: recorded, warning: null };
+      }
+
+      const directory = resolve(to);
+      if (!(await isDirectory(directory))) {
+        throw destinationFailure(
+          `The --to directory ${directory} does not exist. Create it, or name an existing checkout.`,
+        );
+      }
+      // Fresh identity, and the bare-repository refusal, through the same check as any import.
+      const destination = await destinationFor(directory);
+      if (recorded !== null && (await isDirectory(recorded))) {
+        if (!(await stages.finder.belongs(descriptor, directory))) {
+          throw destinationFailure(
+            `The --to directory ${directory} belongs to a different repository than the session's recorded ${recorded}. Import into a checkout of the same repository.`,
+          );
+        }
+        return { directory, warning: null };
+      }
+      // The session's own directory is gone: the override is the only anchor, so it must
+      // be a real checkout rather than an arbitrary directory (FR-61).
+      if (destination.identity.root === null) {
+        throw destinationFailure(
+          `The --to directory ${directory} is not a git checkout. Name an existing checkout of a repository.`,
+        );
+      }
+      return {
+        directory,
+        warning:
+          recorded === null
+            ? null
+            : `the session's recorded directory ${recorded} is missing; importing into ${directory} anyway`,
+      };
+    },
+
+    resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string {
+      return sourceAdapter(descriptor.ref.agent).resumeCommand({
+        home: descriptor.ref.home,
+        directory,
+        sessionId: descriptor.ref.id,
+        filePath: descriptor.filePath,
+        prompt,
+      });
+    },
+
+    async context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]> {
+      const session = await load(descriptor);
+      const plan = stages.rules.apply(session, target, stages.config, stages.estimator);
+      stages.checkCancellation();
+      return plan.turns.map(turnLine);
+    },
+
+    async switchTo(
+      descriptor: SessionDescriptor,
+      runtime: AgentRuntime,
+    ): Promise<{ switched: boolean; cancelled: boolean }> {
+      return await sourceAdapter(descriptor.ref.agent).switchTo(
+        descriptor.ref.home,
+        descriptor.ref.id,
+        runtime,
+        descriptor.filePath,
+      );
     },
   };
 }

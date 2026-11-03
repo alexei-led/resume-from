@@ -5,6 +5,7 @@ import type {
   CommitError,
   CommitRefusal,
   FileCommitter,
+  HandoverInstruction,
   HomePath,
   LandingResult,
   LandingStage,
@@ -18,7 +19,6 @@ import type {
   ValidationDefect,
 } from "./contract.js";
 import { LandingFailure } from "./errors.js";
-import { buildHandover, describeSession, type HandoverCommandBuilder } from "./handover.js";
 import { buildMarker } from "./marker.js";
 
 /** The one landing level that moves the user in (FR-43, FR-44). */
@@ -80,7 +80,7 @@ async function runLanding(
   runtime: AgentRuntime,
   importedAt: string,
   context: SerializationContext,
-  buildCommand: HandoverCommandBuilder,
+  prompt: string | null = null,
 ): Promise<LandingResult> {
   const home = plan.target.home;
   const target = plan.target.agent;
@@ -191,9 +191,22 @@ async function runLanding(
     itemsStored: stored.itemCount,
     marker,
   };
-  const handover = () => buildHandover(buildCommand, target, serialized.sessionId);
+  const filePath = serialized.files[0]?.absolutePath ?? "";
+  // The adapter owns its own resume command, so the landing prints a runnable one (FR-45).
+  const handover = (): HandoverInstruction => ({
+    sessionId: serialized.sessionId,
+    command: adapter.resumeCommand({
+      home,
+      directory: context.cwd,
+      sessionId: serialized.sessionId,
+      filePath,
+      prompt,
+    }),
+  });
 
-  if (capabilities.landing !== SWITCH_LEVEL) {
+  // A null runtime means the host cannot move the user: create only, even for Pi, so an
+  // import into another directory is not switched behind the user's back (FR-44, FR-61).
+  if (capabilities.landing !== SWITCH_LEVEL || runtime === null) {
     return { ...landed, switched: false, handover: handover() };
   }
 
@@ -214,15 +227,9 @@ async function runLanding(
     : { ...landed, switched: false, handover: handover() };
 }
 
-export interface SessionLanderOptions {
-  /** Overrides the placeholder resume command. See handover.ts for the ceiling. */
-  handoverCommand?: HandoverCommandBuilder;
-}
-
-export function createSessionLander(options: SessionLanderOptions = {}): SessionLander {
-  const buildCommand = options.handoverCommand ?? describeSession;
+export function createSessionLander(): SessionLander {
   return {
-    land: (plan, adapter, committer, runtime, importedAt, context) =>
-      runLanding(plan, adapter, committer, runtime, importedAt, context, buildCommand),
+    land: (plan, adapter, committer, runtime, importedAt, context, prompt) =>
+      runLanding(plan, adapter, committer, runtime, importedAt, context, prompt),
   };
 }

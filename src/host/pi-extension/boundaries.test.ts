@@ -52,17 +52,17 @@ describe("T-PIX-15 — the switch has exactly one call site", () => {
   // "PiResumeFromCommand.run is that handler, and no other code path in this module
   // reaches the switch" (module.md, Constraints and Invariants). A tree-wide sweep
   // would flag src/adapters/*/ implementing AgentAdapter.switchTo, which is legal.
-  it("never invokes switchSession or switchTo anywhere in this module", async () => {
+  it("invokes switchSession or switchTo only from the command handler", async () => {
     const files = await read((await moduleFiles()).filter((path) => !path.endsWith(".test.ts")));
 
     const callers = files
       .filter((file) => /\bswitch(?:Session|To)\s*\(/.test(stripComments(file.text)))
       .map((file) => file.path);
 
-    expect(callers).toEqual([]);
+    expect(callers).toEqual([join(moduleDir, "command.ts")]);
   });
 
-  it("hands the runtime to the pipeline from exactly one file, the command handler", async () => {
+  it("hands the runtime to the pipeline only from the command handler", async () => {
     const files = await read((await moduleFiles()).filter((path) => !path.endsWith(".test.ts")));
 
     const commits = files.flatMap((file) => {
@@ -70,7 +70,8 @@ describe("T-PIX-15 — the switch has exactly one call site", () => {
       return hits.map(() => file.path);
     });
 
-    expect(commits).toEqual([join(moduleDir, "command.ts")]);
+    expect(commits.length).toBeGreaterThan(0);
+    expect(new Set(commits)).toEqual(new Set([join(moduleDir, "command.ts")]));
   });
 
   it("subscribes to no event, so no event handler can reach the switch", async () => {

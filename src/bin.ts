@@ -20,29 +20,34 @@ const TARGET_HOME = "--target-home";
 const USER_ARGUMENTS = "--";
 
 const USAGE =
-  `Usage: resume-from ${TARGET_AGENT} <agent> [${TARGET_HOME} <path>] ${USER_ARGUMENTS} ` +
-  "[<source-agent>] [<row> | <session-id> | <file-path>] [options]";
+  `Usage: resume-from <id-or-prefix> [options]\n` +
+  `       resume-from ${TARGET_AGENT} <agent> [${TARGET_HOME} <path>] ${USER_ARGUMENTS} ` +
+  "[<row> | <id-or-prefix> | <file-path>] [options]";
 
 export const HELP_TEXT = `${USAGE}
 
 Selectors:
-  no selector       List sessions available for the current repository.
-  <row>             Select a numbered row from that list (1 or greater).
-  <session-id>      Select an exact session ID.
-  <file-path>       Select a session file by absolute, relative or ~/ path.
+  <id-or-prefix>    Find one session anywhere by ID, or by a prefix of 6+ characters.
+  <file-path>       Describe a session file by absolute, relative or ~/ path.
+  <row>             Inside an agent, select a numbered row from this repository's list.
+  no selector       Inside an agent, list sessions available for the current directory.
 
 Options:
+  --to <dir>        Import into this directory instead of the session's own directory.
+  --prompt <text>   Append the text as the initial prompt of the Resume command.
+  --context         Print the conversation an import would keep; write nothing.
   --agent <name>    Filter source sessions: pi, codex, claude, or claude-code.
   --home <path>     Search one source home, even one outside the configuration.
-  --confirm <token> Import the exact selection and preview identified by the token.
+  --confirm <token> Run the exact recovery or import identified by the token.
   --target-agent    Target host ID; normally supplied by the installed plugin.
   --target-home     Target agent home; omit to use that agent's default.
   -h, --help        Show this help.
 
 Examples:
+  resume-from dc601a22
+  resume-from dc601a22 --prompt "continue the refactor"
   resume-from --target-agent codex --
-  resume-from --target-agent codex -- claude 2
-  resume-from --target-agent claude-code -- session-id
+  resume-from --target-agent claude-code -- claude 2
   resume-from --target-agent codex -- ~/sessions/session.jsonl`;
 
 /** The invocation split in two: what the shim states, and what the user typed. */
@@ -61,16 +66,16 @@ export type ShimArgsResult = { ok: true; value: ShimArgs } | { ok: false; proble
  * Both forms of both flags are accepted (`--flag value` and `--flag=value`) because a shim is a
  * text file a user edits. A flag with no value is left for the caller to report rather than
  * silently swallowing the argument that follows it.
+ *
+ * A bare shell passes no shim flags and no delimiter: every argument is the user's. A shim
+ * passes its target flags, then `--`, then the user's arguments unchanged.
  */
 export function readShimArgs(argv: string[]): ShimArgsResult {
   let targetAgent: string | null = null;
   let targetHome: string | null = null;
   const separator = argv.indexOf(USER_ARGUMENTS);
   if (separator < 0) {
-    return {
-      ok: false,
-      problem: `${USER_ARGUMENTS} is missing after the shim-owned target flags.`,
-    };
+    return { ok: true, value: { targetAgent: null, targetHome: null, rest: [...argv] } };
   }
 
   const trusted = argv.slice(0, separator);
@@ -115,6 +120,10 @@ export function readShimArgs(argv: string[]): ShimArgsResult {
     }
   }
 
+  if (targetHome !== null && targetAgent === null) {
+    return { ok: false, problem: `${TARGET_HOME} needs ${TARGET_AGENT} before ${USER_ARGUMENTS}.` };
+  }
+
   return { ok: true, value: { targetAgent, targetHome, rest } };
 }
 
@@ -130,26 +139,33 @@ export async function main(argv: string[], cwd: string): Promise<number> {
     return 2;
   }
   const { targetAgent, targetHome, rest } = parsed.value;
-  if (targetAgent === null) {
-    process.stderr.write(
-      `${TARGET_AGENT} is missing: the shim that calls this binary states which agent it is ` +
-        `running inside, because guessing it would import into the wrong agent.\n${USAGE}\n` +
-        "Run resume-from --help for selectors, options, and examples.\n",
-    );
-    return 2;
-  }
+  const bareShell = targetAgent === null;
 
   const outcome = await runCommandBinary({
     argv: rest,
     cwd,
     // Unchecked on purpose: the registry knows which agents exist and says so (FR-56).
-    targetAgent: targetAgent as AgentId,
+    targetAgent: targetAgent === null ? null : (targetAgent as AgentId),
     targetHome: targetHome as HomePath | null,
   });
 
-  for (const line of outcome.stdout) process.stdout.write(`${line}\n`);
+  // Dim only the summary lines, only in a bare shell on a terminal the user can colour (FR-61).
+  const dim = bareShell && process.stdout.isTTY === true && process.env.NO_COLOR === undefined;
+  for (const line of dim ? dimSummary(outcome.stdout) : outcome.stdout) {
+    process.stdout.write(`${line}\n`);
+  }
   for (const line of outcome.stderr) process.stderr.write(`${line}\n`);
   return outcome.exitCode;
+}
+
+/** Wrap the first summary line and its indented continuation in ANSI dim. */
+function dimSummary(lines: readonly string[]): string[] {
+  return lines.map((line, index) => {
+    const isSummary =
+      line.startsWith("↻ ") ||
+      (index > 0 && lines[index - 1]?.startsWith("↻ ") === true && line.startsWith("  "));
+    return isSummary ? `\x1b[2m${line}\x1b[22m` : line;
+  });
 }
 
 /**

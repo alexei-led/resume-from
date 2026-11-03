@@ -316,9 +316,12 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       home: HomePath,
       sessionId: SessionId,
       runtime: AgentRuntime,
+      givenFile?: string | null,
     ): Promise<SwitchOutcome> {
       const context = asSwitchContext(runtime);
-      const filePath = await findSessionFile(home, sessionId);
+      // A restore already holds the exact source file, even when it lives under a session
+      // directory the home-derived search would not visit (FR-61).
+      const filePath = givenFile ?? (await findSessionFile(home, sessionId));
       if (!filePath) {
         throw new Error(`the Pi home ${home} holds no session ${sessionId} to switch to`);
       }

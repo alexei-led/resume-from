@@ -4,7 +4,7 @@
 
 import { glob, stat } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
-import type { SessionDescriptor } from "./contract.js";
+import type { SessionDescriptor, SessionLocator } from "./contract.js";
 import { SessionSelectionError } from "./errors.js";
 import { canonicalPath, expandHome, isDirectory, type SourceAdapter } from "./homes.js";
 import { compareDescriptors } from "./ordering.js";
@@ -118,27 +118,22 @@ function isInsidePath(filePath: string, root: string): boolean {
   return within === "" || (!within.startsWith("..") && !isAbsolute(within));
 }
 
-/** Finds one session anywhere. It lists nothing it was not asked for and never writes. */
-export interface SessionLocator {
-  /** Resolves a case-insensitive exact ID, or a prefix of at least six characters (FR-61). */
-  byId(query: string): Promise<SessionDescriptor>;
-  /** Describes one session file directly, without the repository filter (FR-12, FR-61). */
-  byPath(filePath: string): Promise<SessionDescriptor>;
-  /** Every search root, fully resolved, in the order a lookup visits them. */
-  roots(): Promise<string[]>;
-}
-
 export interface LocatorDeps {
   adapters: readonly SourceAdapter[];
 }
 
+type Accept = (descriptor: SessionDescriptor) => boolean | Promise<boolean>;
+
+const acceptAll: Accept = () => true;
+
+/** Finds one session anywhere. It lists nothing it was not asked for and never writes. */
 export function createSessionLocator(deps: LocatorDeps): SessionLocator {
   async function sourcesFor(query: string): Promise<RootSearch[]> {
     return await expandRoots(rankedSources(deps.adapters, query));
   }
 
   return {
-    async byId(query: string): Promise<SessionDescriptor> {
+    async byId(query: string, accept: Accept = acceptAll): Promise<SessionDescriptor> {
       const wanted = query.trim();
       const roots = await sourcesFor(wanted);
       const found: FoundSession[] = [];
@@ -154,10 +149,14 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       }
 
       const unique = await dedupeByFile(found);
-      const exact = unique.filter(
+      const allowed: FoundSession[] = [];
+      for (const entry of unique) {
+        if (await accept(entry.descriptor)) allowed.push(entry);
+      }
+      const exact = allowed.filter(
         (entry) => entry.descriptor.ref.id.toLowerCase() === wanted.toLowerCase(),
       );
-      const candidates = (exact.length > 0 ? exact : unique).sort((left, right) =>
+      const candidates = (exact.length > 0 ? exact : allowed).sort((left, right) =>
         compareDescriptors(left.descriptor, right.descriptor),
       );
       if (candidates.length === 0) {
@@ -173,7 +172,7 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       return only.descriptor;
     },
 
-    async byPath(filePath: string): Promise<SessionDescriptor> {
+    async byPath(filePath: string, accept: Accept = acceptAll): Promise<SessionDescriptor> {
       const wanted = await canonicalPath(filePath);
       let isFile = false;
       try {
@@ -203,7 +202,8 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       ];
       for (const adapter of attempts) {
         try {
-          return await adapter.describeSession(wanted);
+          const descriptor = await adapter.describeSession(wanted);
+          if (await accept(descriptor)) return descriptor;
         } catch {
           // The next adapter may know the format. Only the last failure becomes the error.
         }

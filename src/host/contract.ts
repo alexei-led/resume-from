@@ -92,9 +92,14 @@ import type {
 
 export type { ConfigError, ConfigLoader, HomeEntry, ImportConfig, WindowOverride };
 
-import type { CommitDistance, RepoIdentity, RepoReader } from "../platform/repo/contract.js";
+import type {
+  CommitDistance,
+  RepoIdentity,
+  RepoReader,
+  WorktreeRecovery,
+} from "../platform/repo/contract.js";
 
-export type { CommitDistance, RepoIdentity, RepoReader };
+export type { CommitDistance, RepoIdentity, RepoReader, WorktreeRecovery };
 
 import type {
   Bytes,
@@ -167,6 +172,8 @@ export interface AgentRegistry {
 export interface HostWiring {
   registry(): AgentRegistry;
   pipelineFor(target: TargetProfile): Promise<ImportPipeline>;
+  /** A pipeline for operations that need no target: list, locate and native resume (FR-61). */
+  pipelineForListing(): Promise<ImportPipeline>;
 }
 
 /** Builds the target profile for the agent the user is in (FR-3, FR-18). */

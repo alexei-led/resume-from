@@ -3,7 +3,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentId, ImportRequest, ListRequest } from "./contract.js";
+import type { AgentId, ImportRequest } from "./contract.js";
 import { ImportFailure } from "./errors.js";
 import * as importModule from "./index.js";
 import {
@@ -51,7 +51,7 @@ async function newWorld(...args: Parameters<typeof createWorld>): Promise<World>
   return world;
 }
 
-function listRequest(world: World, target: AgentId): ListRequest {
+function listRequest(world: World, target: AgentId) {
   return {
     destinationCwd: world.repoRoot,
     target: world.targetFor(target),
@@ -63,6 +63,7 @@ function listRequest(world: World, target: AgentId): ListRequest {
 function importRequest(world: World, target: AgentId): ImportRequest {
   return {
     ...listRequest(world, target),
+    target: world.targetFor(target),
     selection: { by: "session-id", id: SOURCE_ID },
   };
 }
@@ -172,7 +173,8 @@ describe("T-IMP-14 — failures preserve existing target data", () => {
     );
 
     const pipeline = createImportPipeline(worldDeps(world));
-    const failure = await commitPreviewed(pipeline, importRequest(world, "pi")).catch(
+    // A runtime is what asks the landing to move the user; null means create only (FR-61).
+    const failure = await commitPreviewed(pipeline, importRequest(world, "pi"), {}).catch(
       (cause) => cause,
     );
 

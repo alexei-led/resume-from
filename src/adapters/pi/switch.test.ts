@@ -1,4 +1,5 @@
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPiAdapter } from "./adapter.js";
 import type { PiSwitchContext } from "./contract.js";
@@ -83,6 +84,17 @@ describe("T-PI-9 — the switch narrows the runtime handle", () => {
     await createPiAdapter().switchTo(home, sessionId, handle);
 
     expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("switches to the given source file even when the home search would not find it", async () => {
+    const { home, sessionId } = committedSession();
+    const context = workingContext();
+    const elsewhere = join(throwawayHome(), "sessions", "--other--", `${sessionId}.jsonl`);
+
+    const outcome = await createPiAdapter().switchTo(home, sessionId, context, elsewhere);
+
+    expect(outcome).toEqual({ switched: true, cancelled: false });
+    expect(context.calls[0]?.path).toBe(elsewhere);
   });
 
   it("refuses a session id that is not in the home, naming the id", async () => {

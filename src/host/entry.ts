@@ -64,6 +64,11 @@ export async function runCommandBinary(
 ): Promise<CliOutcome> {
   try {
     const host = await createHost(deps);
+    if (invocation.targetAgent === null) {
+      // A bare shell has no target agent: list, look up and print native commands only (FR-61).
+      const pipeline = await host.pipelineForListing();
+      return await createCliRunner(null).run(invocation, pipeline);
+    }
     const declared = host.registry().get(invocation.targetAgent).capabilities();
     if (entryPointFor(declared) !== "command-binary") {
       return {

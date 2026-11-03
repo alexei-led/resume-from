@@ -60,6 +60,8 @@ interface ResumeFrom {
 /** Builds one pipeline for one target agent. */
 interface HostWiring {
   pipelineFor(target: TargetProfile): Promise<ImportPipeline>;
+  /** A pipeline for operations that need no target: list, locate and native resume (FR-61). */
+  pipelineForListing(): Promise<ImportPipeline>;
 }
 ```
 
@@ -95,7 +97,10 @@ interface SessionRef {
 
 <!-- contract: ImportPipeline — restated from src/host/module.md (subset: omits list and preview) -->
 ```ts
-/** One import, from listing to landing. Every host drives these three calls. */
+/**
+ * One import, from listing to landing, plus the restore operations an identifier flow needs.
+ * Every host drives these calls; none of the stages behind them is exported (FR-60).
+ */
 interface ImportPipeline {
   /** Runs only after the user confirmed the preview (FR-20). */
   commit(

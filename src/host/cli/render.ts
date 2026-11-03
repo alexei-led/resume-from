@@ -1,10 +1,113 @@
 // The text layout of the numbered list and of the landing outcome.
 // Nothing here decides anything: it prints what the pipeline returned.
 
-import type { LandingResult, Listing, SessionDescriptor } from "./contract.js";
+import { homedir } from "node:os";
+import { join, relative } from "node:path";
+import type { LandingResult, Listing, Place, SessionDescriptor } from "./contract.js";
 import { safeText } from "./presentation.js";
 
 const COLUMN_GAP = "  ";
+const MAX_TITLE = 60;
+
+/** `~` when the path is under the home, the absolute path otherwise. */
+export function shortenPath(value: string, home: string = homedir()): string {
+  const within = relative(home, value);
+  if (within === "" || (!within.startsWith("..") && !within.startsWith("/"))) {
+    return within === "" ? "~" : `~${join("/", within).replaceAll("\\", "/")}`;
+  }
+  return value;
+}
+
+/** One line of untrusted text, shortened to the room a summary line has. */
+function summaryText(value: string): string {
+  const line = safeText(value).replace(/\s+/gu, " ").trim();
+  return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1)}…` : line;
+}
+
+/** A recorded directory, or a short phrase when the session records none. */
+function directoryText(value: string, home: string): string {
+  return value === "" ? "(no recorded directory)" : shortenPath(value, home);
+}
+
+/** The two summary lines every restore output starts with (FR-61). */
+export function renderSummary(
+  descriptor: SessionDescriptor,
+  place: Place,
+  home: string = homedir(),
+): string[] {
+  const title = summaryText(descriptor.title) || "(untitled)";
+  const first =
+    `↻ ${safeText(descriptor.ref.agent)} ${safeText(descriptor.ref.id).slice(0, 8)} · ` +
+    `${safeText(shortenPath(descriptor.ref.home, home))} · ` +
+    `${formatTime(descriptor.updatedAt)} · ${title}`;
+  const state =
+    place.state === "present"
+      ? null
+      : place.state === "recoverable"
+        ? "directory missing; it can be recreated"
+        : "directory missing and cannot be recovered";
+  const second = [
+    directoryText(place.directory, home),
+    place.branch ?? "no branch",
+    ...(state === null ? [] : [state]),
+  ].join(" · ");
+  return [first, `  ${second}`];
+}
+
+/** Every warning as its own `⚠` line. */
+export function renderWarnings(warnings: readonly string[]): string[] {
+  return warnings.map((warning) => `⚠ ${safeText(warning)}`);
+}
+
+/** The native mode output: summary, warnings, and the command that resumes the session. */
+export function renderNative(
+  descriptor: SessionDescriptor,
+  place: Place,
+  command: string,
+  home: string = homedir(),
+): string[] {
+  return [
+    ...renderSummary(descriptor, place, home),
+    ...renderWarnings(place.warnings),
+    `Resume: ${command}`,
+  ];
+}
+
+/** The output before a recovery runs: summary, warnings, each command, and the re-run token. */
+export function renderRecovery(
+  descriptor: SessionDescriptor,
+  place: Place,
+  confirmCommand: string,
+  home: string = homedir(),
+): string[] {
+  const commands = place.recovery?.commands ?? [];
+  return [
+    ...renderSummary(descriptor, place, home),
+    ...renderWarnings(place.warnings),
+    ...commands.map((command) => `Recover: ${command.display}`),
+    `Confirm: ${confirmCommand}`,
+  ];
+}
+
+/** `--context`: the summary, the conversation an import would keep, and the directory. */
+export function renderContext(
+  descriptor: SessionDescriptor,
+  place: Place,
+  turns: readonly string[],
+  home: string = homedir(),
+): string[] {
+  return [
+    ...renderSummary(descriptor, place, home),
+    ...renderWarnings(place.warnings),
+    ...turns.map(safeText),
+    `Directory: ${directoryText(place.directory, home)}`,
+  ];
+}
+
+/** The import preview and the command that confirms it, with the stable Confirm label. */
+export function renderPreview(report: readonly string[], confirmCommand: string): string[] {
+  return [...report.map(safeText), "", `Confirm: ${confirmCommand}`];
+}
 
 export function renderListing(listing: Listing, destinationCwd: string): string[] {
   const lines: string[] =
@@ -30,18 +133,14 @@ export function renderListing(listing: Listing, destinationCwd: string): string[
 }
 
 export function renderLanding(result: LandingResult): string[] {
-  const lines = [
-    `Imported into ${safeText(result.ref.agent)} (${safeText(result.ref.home)}) as session ${safeText(result.ref.id)}.`,
-    `${result.itemsSent} items sent, ${result.itemsStored} stored.`,
-  ];
+  // The provenance summary is the landing's own three lines (FR-47, FR-48), and the
+  // Resume label is what the skill and the user parse (FR-61).
+  const lines = result.marker.lines.map(safeText);
   if (result.switched) {
-    lines.push("You are now in the imported session.");
+    lines.push("Switched.");
   } else if (result.handover !== null) {
-    lines.push(`Open it with: ${safeText(result.handover.command)}`);
+    lines.push(`Resume: ${safeText(result.handover.command)}`);
   }
-  // The marker is always printed: this host has no way to know whether the
-  // target can show one itself (FR-47, FR-48), and hiding it would be a rule.
-  lines.push("", ...result.marker.lines.map(safeText));
   return lines;
 }
 

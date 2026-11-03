@@ -8,6 +8,7 @@ import type {
   AgentId,
   AgentRuntime,
   HomeFailure,
+  ImportDestination,
   ImportPipeline,
   ImportRequest,
   LandingResult,
@@ -17,9 +18,12 @@ import type {
   PickResult,
   PiSwitchContext,
   PiSwitchOptions,
+  Place,
   PreviewReport,
+  RecoveryResult,
   SessionDescriptor,
   SessionPicker,
+  SwitchOutcome,
   UserChoice,
 } from "./contract.js";
 import { createKeyPicker, type PickerKey } from "./picker.js";
@@ -99,7 +103,30 @@ interface PipelineStub {
     runtime: AgentRuntime;
     confirmationToken: string;
   }[];
+  locateCalls: unknown[];
+  switchCalls: SessionDescriptor[];
   order: string[];
+}
+
+/** A located session of another agent: the restore flow then imports (FR-61). */
+function locatedDescriptor(over: Partial<SessionDescriptor> = {}): SessionDescriptor {
+  return descriptor({
+    ref: { agent: "codex", home: "/Users/me/.codex", id: "cx-1" },
+    filePath: "/Users/me/.codex/sessions/cx-1.jsonl",
+    ...over,
+  });
+}
+
+function present(over: Partial<Place> = {}): Place {
+  return {
+    state: "present",
+    directory: "/repo",
+    branch: "main",
+    warnings: [],
+    recovery: null,
+    reason: null,
+    ...over,
+  };
 }
 
 function stubPipeline(
@@ -107,6 +134,13 @@ function stubPipeline(
     listing?: Listing;
     preview?: PreviewReport;
     landing?: LandingResult;
+    located?: SessionDescriptor;
+    place?: Place;
+    destination?: ImportDestination;
+    recovery?: RecoveryResult;
+    recoveryToken?: string | null;
+    context?: string[];
+    switchOutcome?: SwitchOutcome;
     onCommit?: (request: ImportRequest, runtime: AgentRuntime, confirmationToken: string) => void;
   } = {},
 ): PipelineStub {
@@ -114,6 +148,8 @@ function stubPipeline(
     listCalls: [],
     previewCalls: [],
     commitCalls: [],
+    locateCalls: [],
+    switchCalls: [],
     order: [],
     pipeline: {
       async list(request) {
@@ -131,6 +167,50 @@ function stubPipeline(
         stub.order.push("commit");
         opts.onCommit?.(request, runtime, confirmationToken);
         return opts.landing ?? landing();
+      },
+      async locate(request) {
+        stub.locateCalls.push(request);
+        stub.order.push("locate");
+        return opts.located ?? locatedDescriptor();
+      },
+      async place() {
+        stub.order.push("place");
+        return opts.place ?? present();
+      },
+      recoveryToken() {
+        return opts.recoveryToken ?? null;
+      },
+      async recover() {
+        stub.order.push("recover");
+        return (
+          opts.recovery ?? {
+            ok: false,
+            failedCommand: null,
+            stdout: "",
+            stderr: "",
+            message: "no recovery in this stub",
+          }
+        );
+      },
+      async destinationFor(_descriptor, to) {
+        const located = opts.located ?? locatedDescriptor();
+        return (
+          opts.destination ?? {
+            directory: to ?? located.startDirectory ?? "/repo",
+            warning: null,
+          }
+        );
+      },
+      resumeCommand(_descriptor, directory, prompt) {
+        const suffix = prompt === null || prompt === "" ? "" : ` ${prompt}`;
+        return `cd ${directory} && pi --session /Users/me/.pi/sessions/s-1.json${suffix}`;
+      },
+      async context() {
+        return opts.context ?? [];
+      },
+      async switchTo(descriptor) {
+        stub.switchCalls.push(descriptor);
+        return opts.switchOutcome ?? { switched: true, cancelled: false };
       },
     },
   };
@@ -260,7 +340,7 @@ describe("command help", () => {
     );
 
     expect(ui.blocks.flat().join("\n")).toContain(
-      "Usage: /resume-from [<session-id> | <file-path>]",
+      "Usage: /resume-from [<id-or-prefix> | <file-path>]",
     );
     expect(ui.blocks.flat().join("\n")).toContain("No argument opens the session selector.");
     expect(pipeline.order).toEqual([]);
@@ -322,8 +402,69 @@ describe("T-PIX-5 — an argument skips the picker", () => {
   });
 });
 
+describe("T-PIX-5b — native and cross-directory restore", () => {
+  it("switches in-process to the original Pi file when it is this directory", async () => {
+    const located = descriptor({
+      ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+      filePath: "/Users/me/.pi/sessions/--repo--/100_pi-1.jsonl",
+      startDirectory: "/repo",
+    });
+    const { pipeline, switchCalls, previewCalls, commitCalls } = stubPipeline({
+      located,
+      place: present({ directory: "/repo" }),
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(switchCalls).toEqual([located]);
+    expect(previewCalls).toHaveLength(0);
+    expect(commitCalls).toHaveLength(0);
+    expect(ui.asked).toHaveLength(0);
+  });
+
+  it("shows the Resume command for a Pi session in another directory", async () => {
+    const located = descriptor({
+      ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+      filePath: "/Users/me/.pi/sessions/--other--/100_pi-1.jsonl",
+      startDirectory: "/other",
+    });
+    const { pipeline, switchCalls } = stubPipeline({
+      located,
+      place: present({ directory: "/other" }),
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(switchCalls).toEqual([]);
+    expect(ui.blocks.flat().join("\n")).toContain("Resume:");
+  });
+
+  it("does not switch an import whose destination is another directory", async () => {
+    const { pipeline, commitCalls } = stubPipeline({
+      destination: { directory: "/elsewhere", warning: null },
+    });
+    const ui = stubUi(["selected"]);
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["cx-1"], pipeline);
+
+    expect(commitCalls[0]?.request.destinationCwd).toBe("/elsewhere");
+    expect(commitCalls[0]?.runtime).toBeNull();
+  });
+});
+
 describe("T-PIX-6 — the target is the Pi home the user is in", () => {
-  it("uses the context home and the context directory in every request", async () => {
+  it("uses the context home and the located session directory in every request", async () => {
     const pipeline = stubPipeline();
     const picked = stubPicker({ choice: "cancelled", selected: null });
     const ui = stubUi(["selected"]);
@@ -344,7 +485,8 @@ describe("T-PIX-6 — the target is the Pi home the user is in", () => {
       home: "/Users/me/.pi-work",
       windowTokens: PI_WINDOW,
     });
-    expect(request?.destinationCwd).toBe("/work/repo");
+    // An import records the session's own directory, not the invocation directory (FR-61).
+    expect(request?.destinationCwd).toBe("/repo");
     expect(pipeline.commitCalls[0]?.request.target.home).toBe("/Users/me/.pi-work");
   });
 });
@@ -669,7 +811,7 @@ describe("T-PIX-16 — nothing is sent after landing", () => {
     expect(context.switches).toHaveLength(1);
     expect(context.sendMessage).not.toHaveBeenCalled();
     expect(context.runTool).not.toHaveBeenCalled();
-    expect(pipeline.order).toEqual(["preview", "commit"]);
+    expect(pipeline.order).toEqual(["locate", "place", "preview", "commit"]);
   });
 });
 

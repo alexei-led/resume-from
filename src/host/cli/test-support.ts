@@ -5,13 +5,16 @@ import type {
   AgentRuntime,
   CliInvocation,
   HomeFailure,
+  ImportDestination,
   ImportPipeline,
   ImportRequest,
   LandingResult,
   Listing,
   ListRequest,
+  Place,
   PreviewReport,
   ProvenanceMarker,
+  RecoveryResult,
   SessionDescriptor,
 } from "./contract.js";
 
@@ -116,16 +119,35 @@ export interface PipelineCalls {
     confirmationToken: string;
   }[];
   /** The call names in the order they were made. */
-  order: ("list" | "preview" | "commit")[];
+  order: ("list" | "preview" | "commit" | "locate" | "place" | "recover")[];
 }
 
 export interface StubOptions {
   listing?: Listing;
   report?: PreviewReport;
   landing?: LandingResult;
+  /** The descriptor a locate returns; defaults to the standard fixture. */
+  located?: SessionDescriptor;
+  /** Where the located session's directory is; defaults to present at REPO_ROOT. */
+  place?: Place;
+  destination?: ImportDestination;
+  contextLines?: string[];
   listRejects?: unknown;
+  locateRejects?: unknown;
   previewRejects?: unknown;
   commitRejects?: unknown;
+}
+
+export function presentPlace(overrides: Partial<Place> = {}): Place {
+  return {
+    state: "present",
+    directory: REPO_ROOT,
+    branch: "main",
+    warnings: [],
+    recovery: null,
+    reason: null,
+    ...overrides,
+  };
 }
 
 export interface StubPipeline {
@@ -135,6 +157,8 @@ export interface StubPipeline {
 
 export function stubPipeline(options: StubOptions = {}): StubPipeline {
   const calls: PipelineCalls = { list: [], preview: [], commit: [], order: [] };
+  const located = options.located ?? descriptor();
+  const place = options.place ?? presentPlace();
   const pipeline: ImportPipeline = {
     list(request) {
       calls.list.push(request);
@@ -153,6 +177,46 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
       calls.order.push("commit");
       if (options.commitRejects !== undefined) return Promise.reject(options.commitRejects);
       return Promise.resolve(options.landing ?? landing());
+    },
+    async locate() {
+      calls.order.push("locate");
+      if (options.locateRejects !== undefined) return Promise.reject(options.locateRejects);
+      return located;
+    },
+    async place() {
+      calls.order.push("place");
+      return place;
+    },
+    recoveryToken() {
+      return null;
+    },
+    async recover(): Promise<RecoveryResult> {
+      calls.order.push("recover");
+      return {
+        ok: false,
+        failedCommand: null,
+        stdout: "",
+        stderr: "",
+        message: "this stub has no recovery",
+      };
+    },
+    async destinationFor(_descriptor, to): Promise<ImportDestination> {
+      return (
+        options.destination ?? {
+          directory: to ?? located.startDirectory ?? located.repoPath ?? REPO_ROOT,
+          warning: null,
+        }
+      );
+    },
+    resumeCommand(target, directory, prompt) {
+      const suffix = prompt === null || prompt === "" ? "" : ` ${prompt}`;
+      return `cd ${directory} && ${target.ref.agent} resume ${target.ref.id}${suffix}`;
+    },
+    async context() {
+      return options.contextLines ?? ["User: hello", "Agent: hi"];
+    },
+    async switchTo() {
+      return { switched: true, cancelled: false };
     },
   };
   return { pipeline, calls };

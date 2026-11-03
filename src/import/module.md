@@ -17,7 +17,17 @@ those two points knows either name.
 
 ## Functional Responsibilities
 
-- Expose three operations to every host: `list`, `preview`, `commit` (FR-7, FR-16, FR-20).
+- Expose the import operations `list`, `preview` and `commit`, and the restore operations `locate`,
+  `place`, `recoveryToken`, `recover`, `destinationFor`, `resumeCommand`, `context` and `switchTo`
+  (FR-7, FR-16, FR-20, FR-61).
+- Resolve a row, ID/prefix or file path; an ID or path is looked up globally and is never filtered
+  by repository (FR-61).
+- Substitute an already-located descriptor, so an identifier import never lists or parses a home
+  again (FR-61).
+- Plan a recovery of a missing directory and bind it to a confirmation token; run it only when the
+  token matches (FR-61).
+- Choose the import destination as the session's own directory or the `--to` override, refusing a
+  different repository (FR-61).
 - Hold the stage order and pass each stage's output to the next.
 - Recompute the plan on `commit` from the same request that produced the preview, so the two
   invocations of a numbered-list host agree (FR-10, FR-20).
@@ -334,11 +344,15 @@ interface AgentAdapter {
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
   readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
 
-  /** Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44). */
+  /**
+   * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).
+   * `filePath` names an existing session file when the host already holds it (FR-61).
+   */
   switchTo(
     home: HomePath,
     sessionId: SessionId,
     runtime: AgentRuntime,
+    filePath?: string | null,
   ): Promise<SwitchOutcome>;
 }
 ```
@@ -508,6 +522,11 @@ interface SessionFinder {
     input: SelectionInput,
     destination?: DiscoveryDestination,
   ): Promise<SessionDescriptor>;
+  /**
+   * True when one of the session's recorded directories belongs to the repository at
+   * `directory`, using the same membership rule as listing (FR-13, FR-61).
+   */
+  belongs(descriptor: SessionDescriptor, directory: string): Promise<boolean>;
   /** Reads one session into the neutral vocabulary, through its source adapter. */
   load(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 }
@@ -670,6 +689,7 @@ interface SessionLander {
     runtime: AgentRuntime,
     importedAt: string,
     context: SerializationContext,
+    prompt?: string | null,
   ): Promise<LandingResult>;
 }
 ```
@@ -681,7 +701,8 @@ The blocks below are the normative home of the types they define.
 interface ListRequest {
   /** Host-supplied absolute working directory; preserve native subdirectory and symlink spelling. */
   destinationCwd: string;
-  target: TargetProfile;
+  /** Null in a bare shell, where listing needs no target agent (FR-61). */
+  target: TargetProfile | null;
   onlyAgent: AgentId | null;
   onlyHome: HomePath | null;
 }
@@ -692,13 +713,40 @@ interface ImportRequest {
   destinationCwd: string;
   target: TargetProfile;
   selection: SelectionInput;
+  /**
+   * Set when the session was already located. Discovery then uses this descriptor instead of
+   * listing or parsing any home again (FR-61).
+   */
+  located?: SessionDescriptor | null;
+  /** The initial prompt appended to the resumed session, when the host asked for one (FR-61). */
+  prompt?: string | null;
   onlyAgent: AgentId | null;
   onlyHome: HomePath | null;
+}
+
+/** How the user named one session to restore (FR-61). */
+interface LocateRequest {
+  selection: SelectionInput;
+  /** The invocation directory, used only to resolve a row of this repository's list. */
+  cwd: string;
+  onlyAgent: AgentId | null;
+  onlyHome: HomePath | null;
+}
+
+/** The directory an import of a located session records, and any note about it (FR-61). */
+interface ImportDestination {
+  /** Absolute directory the imported session records as its own. */
+  directory: string;
+  /** A note the host prints as a warning; null when the destination needs none. */
+  warning: string | null;
 }
 ```
 
 ```ts
-/** One import, from listing to landing. Every host drives these three calls. */
+/**
+ * One import, from listing to landing, plus the restore operations an identifier flow needs.
+ * Every host drives these calls; none of the stages behind them is exported (FR-60).
+ */
 interface ImportPipeline {
   list(request: ListRequest): Promise<Listing>;
   /** Writes nothing (FR-16). */
@@ -709,6 +757,23 @@ interface ImportPipeline {
     runtime: AgentRuntime,
     confirmationToken: string,
   ): Promise<LandingResult>;
+
+  /** Resolves a row, ID/prefix or path; an ID or path is not filtered by repository (FR-61). */
+  locate(request: LocateRequest): Promise<SessionDescriptor>;
+  /** Where the session's recorded directory is, and how it could be recreated (FR-61). */
+  place(descriptor: SessionDescriptor): Promise<Place>;
+  /** Binds the session file, directory and recovery argv into a token (FR-61). */
+  recoveryToken(descriptor: SessionDescriptor, place: Place): string | null;
+  /** Runs the recovery only when the token matches. A mismatch runs nothing (FR-61). */
+  recover(descriptor: SessionDescriptor, place: Place, token: string): Promise<RecoveryResult>;
+  /** The directory an import records: the session directory, or the --to override (FR-61). */
+  destinationFor(descriptor: SessionDescriptor, to: string | null): Promise<ImportDestination>;
+  /** The source agent's native command that resumes the session in `directory` (FR-61). */
+  resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string;
+  /** The conversation an import into `target` would keep, as plain text lines (FR-61). */
+  context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]>;
+  /** Moves the user into an existing session of its own agent (FR-44, FR-61). */
+  switchTo(descriptor: SessionDescriptor, runtime: AgentRuntime): Promise<SwitchOutcome>;
 }
 ```
 

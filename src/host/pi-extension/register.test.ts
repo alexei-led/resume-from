@@ -30,6 +30,28 @@ describe("registration", () => {
       async commit() {
         throw new Error("not reached");
       },
+      async locate() {
+        throw new Error("not reached");
+      },
+      async place() {
+        throw new Error("not reached");
+      },
+      recoveryToken: () => null,
+      async recover() {
+        throw new Error("not reached");
+      },
+      async destinationFor() {
+        throw new Error("not reached");
+      },
+      resumeCommand() {
+        throw new Error("not reached");
+      },
+      async context() {
+        throw new Error("not reached");
+      },
+      async switchTo() {
+        throw new Error("not reached");
+      },
     };
     const ctx: PiCommandContext = {
       cwd: "/repo",

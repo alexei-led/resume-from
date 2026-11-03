@@ -8,6 +8,7 @@ import {
   landing,
   listing,
   marker,
+  presentPlace,
   report,
   rowLines,
   stubPipeline,
@@ -67,8 +68,194 @@ describe("T-CLI-21 the FR-10 sequence", () => {
       row: 3,
     });
     expect(third.calls.commit[0]?.request).toEqual(second.calls.preview[0]);
-    expect(landed.stdout.join("\n")).toContain("landed-from-3");
+    expect(landed.stdout.join("\n")).toContain("Resume: claude --resume new-session-7");
     expect(landed.exitCode).toBe(0);
+  });
+});
+
+describe("T-CLI-25 the identifier flow", () => {
+  it("resumes natively when the session belongs to the current agent", async () => {
+    const located = descriptor({
+      ref: {
+        agent: "claude-code",
+        home: "/Users/me/.claude",
+        id: "dc601a22-64e3-410b-9321-bb8f86bdc5ad",
+      },
+      startDirectory: "/work/app",
+      repoPath: "/work/app",
+    });
+    const { pipeline, calls } = stubPipeline({
+      located,
+      place: presentPlace({ directory: "/work/app", branch: "main" }),
+    });
+
+    const outcome = await createCliRunner().run(invocation({ argv: [located.ref.id] }), pipeline);
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("Resume: cd /work/app && claude-code resume");
+    expect(calls.preview).toHaveLength(0);
+    expect(calls.commit).toHaveLength(0);
+  });
+
+  it("never imports in a bare shell, even when the agent differs", async () => {
+    const located = descriptor({
+      ref: { agent: "codex", home: "/Users/me/.codex", id: "019d1e2f-3a4b-7c5d-8e9f-0123456789ab" },
+      startDirectory: "/work/app",
+      repoPath: "/work/app",
+    });
+    const { pipeline, calls } = stubPipeline({ located });
+
+    const outcome = await createCliRunner(null).run(
+      invocation({ argv: [located.ref.id], targetAgent: null }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("Resume:");
+    expect(calls.preview).toHaveLength(0);
+    expect(calls.commit).toHaveLength(0);
+  });
+
+  it("--context prints the conversation an import would keep and a Directory line", async () => {
+    const located = descriptor({ startDirectory: "/work/app", repoPath: "/work/app" });
+    const { pipeline, calls } = stubPipeline({
+      located,
+      place: presentPlace({ directory: "/work/app", branch: "main" }),
+      contextLines: ["User: inspect it", "Agent: done", "Tool: Read(file) → ok"],
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--context"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("User: inspect it");
+    expect(outcome.stdout.join("\n")).toContain("Tool: Read(file) → ok");
+    expect(outcome.stdout.join("\n")).toContain("Directory: /work/app");
+    expect(calls.preview).toHaveLength(0);
+    expect(calls.commit).toHaveLength(0);
+  });
+
+  it("prints the ambiguity message and selects nothing", async () => {
+    const { pipeline, calls } = stubPipeline({
+      locateRejects: {
+        input: "dc601a22",
+        message:
+          'Session "dc601a22" matches 2 sessions. Select one by exact file path, or narrow the search with --agent or --home.',
+      },
+    });
+
+    const outcome = await createCliRunner().run(invocation({ argv: ["dc601a22"] }), pipeline);
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("matches 2 sessions");
+    expect(calls.preview).toHaveLength(0);
+  });
+
+  it("appends --prompt to the native command, shell-quoted by the adapter", async () => {
+    const located = descriptor({
+      ref: { agent: "claude-code", home: "/Users/me/.claude", id: "sess-9" },
+      startDirectory: "/work/app",
+      repoPath: "/work/app",
+    });
+    const { pipeline } = stubPipeline({
+      located,
+      place: presentPlace({ directory: "/work/app" }),
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--prompt", "continue the refactor"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("continue the refactor");
+  });
+
+  it("--context never recovers a missing directory", async () => {
+    const located = descriptor({ startDirectory: "/gone/app", repoPath: "/gone/app" });
+    const { pipeline, calls } = stubPipeline({
+      located,
+      place: {
+        state: "recoverable",
+        directory: "/gone/app",
+        branch: null,
+        warnings: [],
+        recovery: {
+          repoRoot: "/work/app",
+          directory: "/gone/app",
+          commands: [
+            {
+              cwd: "/work/app",
+              argv: ["worktree", "add", "/gone/app", "main"],
+              display: "git -C /work/app worktree add /gone/app main",
+            },
+          ],
+          warnings: [],
+          note: null,
+        },
+        reason: null,
+      },
+      contextLines: ["User: inspect it"],
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--context"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("Directory: /gone/app");
+    expect(calls.order).not.toContain("recover");
+    expect(calls.commit).toHaveLength(0);
+  });
+
+  it("lets --to import an unrecoverable session into another checkout, with a warning", async () => {
+    const located = descriptor({
+      ref: { agent: "codex", home: "/Users/me/.codex", id: "sess-2" },
+      startDirectory: "/gone/app",
+      repoPath: "/gone/app",
+    });
+    const warning =
+      "the session's recorded directory /gone/app is missing; importing into /work/other anyway";
+    const { pipeline, calls } = stubPipeline({
+      located,
+      place: {
+        state: "unrecoverable",
+        directory: "/gone/app",
+        branch: null,
+        warnings: [],
+        recovery: null,
+        reason: "no repository was found for /gone/app",
+      },
+      destination: { directory: "/work/other", warning },
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--to", "/work/other"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain("Confirm:");
+    expect(outcome.stdout.join("\n")).toContain(warning);
+    expect(calls.preview[0]?.destinationCwd).toBe("/work/other");
+    expect(calls.preview[0]?.located).toEqual(located);
+  });
+
+  it("refuses --to in a bare shell, which never imports", async () => {
+    const { pipeline, calls } = stubPipeline();
+
+    const outcome = await createCliRunner(null).run(
+      invocation({ argv: ["sess-1", "--to", "/work/other"], targetAgent: null }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("bare shell");
+    expect(calls.preview).toHaveLength(0);
+    expect(calls.commit).toHaveLength(0);
   });
 });
 
@@ -125,17 +312,14 @@ describe("T-CLI-22 the same shape from Codex and from Claude Code", () => {
     const fromCodex = await commitWith("codex", codexResult);
     const fromClaude = await commitWith("claude-code", claudeResult);
 
-    expect(fromCodex.stdout).toHaveLength(fromClaude.stdout.length);
     expect(fromCodex.exitCode).toBe(fromClaude.exitCode);
 
-    // Every line that differs carries a value the pipeline supplied, never a
-    // different layout: the handover command and the target the adapter named.
-    const differing = fromCodex.stdout.filter((line, index) => line !== fromClaude.stdout[index]);
-    expect(differing.length).toBeGreaterThan(0);
-    for (const line of differing) {
-      expect(line.includes("codex")).toBe(true);
+    // The layout is the same; only the adapter-supplied Resume command differs (FR-45).
+    expect(fromCodex.stdout).toContain("Resume: codex resume landed-1");
+    expect(fromClaude.stdout).toContain("Resume: claude --resume landed-1");
+    for (const line of fromCodex.stdout.filter((candidate) => !candidate.startsWith("Resume: "))) {
+      expect(fromClaude.stdout).toContain(line);
     }
-    expect(differing.some((line) => line.includes("codex resume landed-1"))).toBe(true);
   });
 });
 
@@ -148,7 +332,7 @@ describe("T-CLI-23 a new numbered-list agent needs no change here", () => {
 
     const outcome = await createCliRunner().run(invocation({ targetAgent: fourth }), pipeline);
 
-    expect(calls.list[0]?.target.agent).toBe(fourth);
+    expect(calls.list[0]?.target?.agent).toBe(fourth);
     expect(rowLines(outcome.stdout)).toHaveLength(1);
     expect(outcome.exitCode).toBe(0);
   });

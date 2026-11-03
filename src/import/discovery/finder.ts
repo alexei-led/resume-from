@@ -58,6 +58,61 @@ function isMatch(evidence: DirectoryEvidence, destination: DirectoryEvidence | n
   );
 }
 
+/** What one session's recorded directories say about the destination repository. */
+interface Membership {
+  /** A recorded candidate belongs to the destination, with no conflicting identity. */
+  matchedHere: boolean;
+  /** Some recorded candidate carries a different Git common directory. */
+  conflicting: boolean;
+  /** At least one recorded candidate could be looked up. */
+  existing: boolean;
+  /** The start directory is the last resort and belongs to the destination. */
+  startedHere: boolean;
+}
+
+/**
+ * The one membership rule: a session belongs to the destination when a recorded directory matches
+ * it and no candidate conflicts, or, as a last resort, when its start directory matches.
+ * Listing, rows, IDs, paths and `--to` all use this function (FR-13, FR-61).
+ */
+async function membershipOf(
+  descriptor: SessionDescriptor,
+  destination: DirectoryEvidence | null,
+  lookup: Lookup,
+): Promise<Membership> {
+  let matched = false;
+  let conflicting = false;
+  let existing = false;
+  // Do not accept early: a later candidate can disprove the membership.
+  for (const candidate of descriptor.repoPaths) {
+    const evidence = await lookup(candidate);
+    if (evidence === null) continue;
+    existing = true;
+    matched ||= isMatch(evidence, destination);
+    if (evidence.commonDir !== null) {
+      conflicting ||= evidence.commonDir !== destination?.commonDir;
+    }
+  }
+  const matchedHere = matched && !conflicting;
+  // The start directory settles the case where no recorded candidate matched at all, and it
+  // never overrides a match or a conflict (issue #5).
+  const startDirectory = descriptor.startDirectory;
+  // A start directory that is already a recorded candidate adds nothing: the loop above looked
+  // it up with the same rule. Skipping it keeps the fallback from spending a second lookup on
+  // every session it cannot list (adapters whose header directory is their only candidate).
+  const startIsCandidate = startDirectory !== null && descriptor.repoPaths.includes(startDirectory);
+  const startEvidence =
+    matchedHere || conflicting || startDirectory === null || startIsCandidate
+      ? null
+      : await lookup(startDirectory);
+  return {
+    matchedHere,
+    conflicting,
+    existing,
+    startedHere: startEvidence !== null && isMatch(startEvidence, destination),
+  };
+}
+
 function isCancellation(reason: unknown): boolean {
   return reason instanceof Error && reason.name === "AbortError";
 }
@@ -111,45 +166,16 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
       deps.repo.checkCancellation();
       let diagnostic: string | null = null;
       try {
-        let matched = false;
-        let conflictingGitIdentity = false;
-        let existing = false;
-        // Do not accept early: a later candidate can disprove the membership.
-        for (const candidate of descriptor.repoPaths) {
-          const evidence = await lookup(candidate);
-          if (evidence === null) continue;
-          existing = true;
-          matched ||= isMatch(evidence, destination);
-          if (evidence.commonDir !== null) {
-            conflictingGitIdentity ||= evidence.commonDir !== destination?.commonDir;
-          }
-        }
-        // The primary decision (FR-13): a match includes, a conflict excludes, and a match never
-        // overrides a conflict.
-        const matchedHere = matched && !conflictingGitIdentity;
-        // The start directory is a last resort: it settles the case where no recorded candidate
-        // matched at all, and it never overrides a match or a conflict (issue #5).
-        const startDirectory = descriptor.startDirectory;
-        // A start directory that is already a recorded candidate adds nothing: the loop above looked
-        // it up with the same rule. Skipping it keeps the fallback from spending a second lookup on
-        // every session it cannot list (adapters whose header directory is their only candidate).
-        const startIsCandidate =
-          startDirectory !== null && descriptor.repoPaths.includes(startDirectory);
-        const startEvidence =
-          matchedHere || conflictingGitIdentity || startDirectory === null || startIsCandidate
-            ? null
-            : await lookup(startDirectory);
-        const startedHere = startEvidence !== null && isMatch(startEvidence, destination);
-
-        if (matchedHere || startedHere) {
+        const membership = await membershipOf(descriptor, destination, lookup);
+        if (membership.matchedHere || membership.startedHere) {
           rows.push(descriptor);
-        } else if (conflictingGitIdentity) {
+        } else if (membership.conflicting) {
           diagnostic =
             "has conflicting repository identity evidence; its recorded directories cannot unambiguously belong to this destination";
         } else if (descriptor.repoPaths.length === 0) {
           diagnostic = "records no repository, so it cannot be listed here";
         } else {
-          diagnostic = existing
+          diagnostic = membership.existing
             ? "has unresolved recorded directories with no matching repository evidence"
             : "has only missing recorded directories; repository membership cannot be established";
         }
@@ -267,6 +293,43 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
     return chosen;
   }
 
+  /** True when one recorded directory of the session belongs to the repository at `directory`. */
+  async function belongs(descriptor: SessionDescriptor, directory: string): Promise<boolean> {
+    deps.repo.checkCancellation();
+    const cache = new Map<string, Promise<DirectoryEvidence | null>>();
+    const lookup: Lookup = async (value) => {
+      const absolute = resolve(value);
+      let pending = cache.get(absolute);
+      if (!pending) {
+        pending = (async () => {
+          try {
+            const canonical = await realpath(absolute);
+            const identity = await deps.repo.identify(canonical);
+            return { directory: canonical, commonDir: identity.commonDir };
+          } catch (reason) {
+            if ((reason as NodeJS.ErrnoException).code === "ENOENT") return null;
+            throw reason;
+          }
+        })();
+        cache.set(absolute, pending);
+      }
+      return await pending;
+    };
+
+    let destination: DirectoryEvidence | null;
+    try {
+      destination = await lookup(directory);
+    } catch (reason) {
+      deps.repo.checkCancellation();
+      if (isCancellation(reason)) throw reason;
+      return false;
+    }
+    if (destination === null) return false;
+    const membership = await membershipOf(descriptor, destination, lookup);
+    deps.repo.checkCancellation();
+    return membership.matchedHere || membership.startedHere;
+  }
+
   return {
     async list(scope: SearchScope, destination?: DiscoveryDestination): Promise<Listing> {
       return await buildListing(scope, destination);
@@ -322,6 +385,8 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
         }
       }
     },
+
+    belongs,
 
     async load(descriptor: SessionDescriptor): Promise<CanonicalSession> {
       deps.repo.checkCancellation();

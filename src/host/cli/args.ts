@@ -6,7 +6,7 @@ import { join, resolve, win32 } from "node:path";
 import type { AgentId, HomePath, SelectionInput } from "./contract.js";
 
 export const USAGE =
-  "Usage: /resume-from [<agent>] [<row> | <session-id> | <file-path>] [--home <path>] [--agent <name>] [--confirm <token>]";
+  "Usage: /resume-from <id-or-prefix> [options]   (inside an agent: /resume-from <row> | <id-or-prefix> | <file-path>)";
 
 /** The agent names the user may type, and the agent they mean (FR-15). */
 const AGENT_NAMES: Record<string, AgentId> = {
@@ -32,6 +32,12 @@ export interface ParsedArgs {
   onlyAgent: AgentId | null;
   onlyHome: HomePath | null;
   confirmationToken: string | null;
+  /** An absolute destination override for an import (FR-61). */
+  to: string | null;
+  /** The initial prompt appended to a Resume command (FR-61). */
+  prompt: string | null;
+  /** Read the conversation instead of writing anything (FR-61). */
+  context: boolean;
 }
 
 export type ParseResult = { ok: true; args: ParsedArgs } | { ok: false; problem: string };
@@ -43,10 +49,53 @@ export function parseArgs(argv: string[], cwd: string): ParseResult {
   let onlyAgent: AgentId | null = null;
   let onlyHome: HomePath | null = null;
   let confirmationToken: string | null = null;
+  let to: string | null = null;
+  let prompt: string | null = null;
+  let context = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === undefined) continue;
+
+    if (arg === "--context") {
+      if (context) {
+        return { ok: false, problem: "--context was given twice. Name it once." };
+      }
+      context = true;
+      continue;
+    }
+
+    if (arg === "--to" || arg.startsWith("--to=")) {
+      if (to !== null) {
+        return { ok: false, problem: "--to was given twice. Name one destination." };
+      }
+      const value = arg.startsWith("--to=") ? arg.slice("--to=".length) : argv[index + 1];
+      if (value === undefined || value === "" || value.startsWith("-")) {
+        return {
+          ok: false,
+          problem: "--to needs a directory. Correct form: --to <dir>.",
+        };
+      }
+      if (!arg.startsWith("--to=")) index += 1;
+      to = resolvePath(value, cwd);
+      continue;
+    }
+
+    if (arg === "--prompt" || arg.startsWith("--prompt=")) {
+      if (prompt !== null) {
+        return { ok: false, problem: "--prompt was given twice. Give one prompt." };
+      }
+      const value = arg.startsWith("--prompt=") ? arg.slice("--prompt=".length) : argv[index + 1];
+      if (value === undefined || value === "") {
+        return {
+          ok: false,
+          problem: "--prompt needs text. Correct form: --prompt <text>.",
+        };
+      }
+      if (!arg.startsWith("--prompt=")) index += 1;
+      prompt = value;
+      continue;
+    }
 
     if (isConfirmFlag(arg)) {
       if (confirmationToken !== null) {
@@ -124,7 +173,7 @@ export function parseArgs(argv: string[], cwd: string): ParseResult {
       }
       return {
         ok: false,
-        problem: `"${arg}" is not a flag this command knows. Known flags: --home, --agent, --confirm.`,
+        problem: `"${arg}" is not a flag this command knows. Known flags: --home, --agent, --to, --prompt, --context, --confirm.`,
       };
     }
 
@@ -169,9 +218,16 @@ export function parseArgs(argv: string[], cwd: string): ParseResult {
     };
   }
 
+  if (selection === null && (to !== null || prompt !== null || context)) {
+    return {
+      ok: false,
+      problem: "--to, --prompt and --context need the session ID, prefix or path they apply to.",
+    };
+  }
+
   return {
     ok: true,
-    args: { selection, onlyAgent, onlyHome, confirmationToken },
+    args: { selection, onlyAgent, onlyHome, confirmationToken, to, prompt, context },
   };
 }
 

@@ -27,7 +27,7 @@ function renderProvenance(entry, { expanded }, theme) {
   return {
     render(width) {
       return visible.map((line) =>
-        theme.bg("customMessageBg", truncateToWidth(safeText(line), Math.max(0, width), "")),
+        theme.fg("dim", truncateToWidth(safeText(line), Math.max(0, width), "")),
       );
     },
     invalidate() {},
@@ -40,9 +40,33 @@ function agentHome() {
   return isAbsolute(configured) ? configured : resolve(configured);
 }
 
+/** Split the raw command line on whitespace, honouring simple single and double quotes. */
 function commandArgs(raw) {
-  const trimmed = raw.trim();
-  return trimmed === "" ? [] : [trimmed];
+  const args = [];
+  let current = "";
+  let quote = null;
+  let started = false;
+  for (const character of raw) {
+    if (quote !== null) {
+      if (character === quote) quote = null;
+      else current += character;
+      started = true;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+      started = true;
+    } else if (/\s/.test(character)) {
+      if (started) {
+        args.push(current);
+        current = "";
+        started = false;
+      }
+    } else {
+      current += character;
+      started = true;
+    }
+  }
+  if (started) args.push(current);
+  return args;
 }
 
 function uiFor(context) {

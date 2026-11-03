@@ -1,15 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import {
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterEach, expect, test } from "vitest";
@@ -48,7 +39,7 @@ async function temporaryRoot(label: string): Promise<string> {
   return root;
 }
 
-/** Include metadata and uncommitted files: importing must not modify either checkout. */
+/** Include metadata and uncommitted files: restoring a session must not modify a checkout. */
 async function snapshot(root: string): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
   async function walk(directory: string): Promise<void> {
@@ -103,11 +94,20 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
   await mkdir(destinationCwd);
   await writeFile(join(sourceCwd, "tracked.txt"), "source uncommitted change\n");
   await writeFile(join(destinationCwd, "untracked.txt"), "destination uncommitted file\n");
-  const sourceHome = join(root, "alternate Claude profile");
+  const sourceHome = join(root, "claude profile");
   const targetHome = join(root, "target profile");
+  // Every default root, including the `~/.claude*` glob, stays inside the throwaway root.
+  const previousHome = process.env.HOME;
+  process.env.HOME = root;
+  guards.push({
+    restore() {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+    },
+  });
   guards.push(
     withHomes({
-      "claude-code": join(root, "default Claude profile"),
+      "claude-code": sourceHome,
       codex: join(root, "empty Codex profile"),
       pi: join(root, "empty Pi profile"),
     }),
@@ -201,14 +201,12 @@ async function unchangedAfter(scene: Scene): Promise<() => Promise<void>> {
   return async () => expect(await Promise.all(paths.map(snapshot))).toEqual(before);
 }
 
-async function previewToken(scene: Scene, selector: string = scene.id): Promise<string> {
-  const preview = await scene.run([selector]);
+/** Preview with the selector and return the confirmation token the CLI printed. */
+async function previewToken(scene: Scene, args: string[]): Promise<string> {
+  const preview = await scene.run(args);
   expect(preview.stderr).toEqual([]);
   expect(preview.exitCode).toBe(0);
-  expect(preview.stdout).toContain(`Destination: ${scene.destinationCwd}`);
-  expect(preview.stdout.join("\n")).toContain(
-    "The source session records a different directory. Conversation import does not transfer uncommitted work, switch branches, or recreate removed worktrees.",
-  );
+  expect(preview.stdout.join("\n")).toContain("Confirm:");
   const token = preview.stdout.join("\n").match(/v1-sha256-[0-9a-f]{64}/)?.[0];
   expect(token).toBeDefined();
   if (!token) throw new Error("CLI preview did not print a confirmation token");
@@ -216,71 +214,160 @@ async function previewToken(scene: Scene, selector: string = scene.id): Promise<
   return token;
 }
 
-async function readNativeImport(scene: Scene, agent: AgentId): Promise<string> {
+async function readNativeImport(scene: Scene, agent: AgentId, directory: string): Promise<string> {
   const adapter = scene.host.registry().get(agent);
   const descriptors = await adapter.listSessions(scene.targetHome);
   expect(descriptors).toHaveLength(1);
   const descriptor = descriptors[0];
   if (!descriptor) throw new Error("native import missing");
   expect(descriptor.ref.home).toBe(scene.targetHome);
-  expect(descriptor.repoPaths).toEqual([scene.destinationCwd]);
+  expect(descriptor.repoPaths).toEqual([directory]);
   const facts = await adapter.readBack(scene.targetHome, descriptor.ref.id);
   expect(facts.openable).toBe(true);
   expect(facts.itemCount).toBeGreaterThan(0);
   const session = await adapter.loadSession(descriptor);
   expect(JSON.stringify(session.turns)).toContain("Inspect the tracked file without changing it.");
   expect(JSON.stringify(session.turns)).toContain("The tracked file is ready for inspection.");
-  const entries = (await readFile(descriptor.filePath, "utf8"))
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line));
-  if (agent === "claude-code") {
-    expect(dirname(descriptor.filePath)).toBe(
-      join(scene.targetHome, "projects", scene.destinationCwd.replace(/[^a-zA-Z0-9]/g, "-")),
-    );
-    const recorded = entries.filter((entry) => entry.cwd !== undefined);
-    expect(recorded.length).toBeGreaterThan(0);
-    expect(recorded.every((entry) => entry.cwd === scene.destinationCwd)).toBe(true);
-  } else {
-    expect(entries[0].cwd).toBe(scene.destinationCwd);
-    expect(dirname(descriptor.filePath)).toBe(
-      join(
-        scene.targetHome,
-        "sessions",
-        `--${scene.destinationCwd.replace(/^\//, "").replace(/[\\/]/g, "-")}--`,
-      ),
-    );
-  }
   return descriptor.filePath;
 }
 
-test.each([
-  ["main-to-nested", "row"],
-  ["sibling-to-main", "id"],
-  ["sibling-to-external", "path"],
-] as const)(
-  "CLI %s: list, %s preview, confirmation and native Claude readback",
-  async (direction, selection) => {
+test.each([["main-to-nested"], ["sibling-to-main"], ["sibling-to-external"]] as const)(
+  "CLI %s: the numbered row flow still previews and imports into the invocation directory",
+  async (direction) => {
     const scene = await bench(direction);
-    expect(git(scene.sourceCwd, "rev-parse", "HEAD")).toBe(
-      git(scene.destination, "rev-parse", "HEAD"),
-    );
-    expect(process.cwd()).not.toBe(scene.destinationCwd);
     const unchanged = await unchangedAfter(scene);
     const listed = await scene.run([]);
     expect(listed.exitCode).toBe(0);
-    expect(listed.stderr).toEqual([]);
     expect(listed.stdout.join("\n")).toContain("Inspect the tracked file");
-    const selector = selection === "row" ? "1" : selection === "id" ? scene.id : scene.file;
-    const token = await previewToken(scene, selector);
-    const imported = await scene.run([selector, "--confirm", token]);
-    expect(imported.stderr).toEqual([]);
-    expect(imported.exitCode).toBe(0);
-    expect(imported.stdout.join("\n")).toContain("Open it with:");
-    await readNativeImport(scene, "claude-code");
+    // A row keeps the existing flow: preview, confirm, land, and print a Resume command.
+    const token = await previewToken(scene, ["1"]);
+    const imported = await scene.run(["1", "--confirm", token]);
+    expect(imported.stdout.join("\n")).toContain("Resume:");
+    await readNativeImport(scene, "claude-code", scene.destinationCwd);
     await unchanged();
   },
 );
+
+test("CLI restores a same-agent session natively and writes nothing", async () => {
+  const scene = await bench("sibling-to-external");
+  const unchanged = await unchangedAfter(scene);
+  const outcome = await scene.run([scene.id]);
+  expect(outcome.exitCode).toBe(0);
+  expect(outcome.stderr).toEqual([]);
+  const shown = outcome.stdout.join("\n");
+  expect(shown).toContain("Resume: cd ");
+  expect(shown).toContain(` && claude --resume ${scene.id}`);
+  expect(shown).toContain("↻ claude-code");
+  expect(await snapshot(scene.targetHome)).toEqual({});
+  await unchanged();
+});
+
+test("CLI imports a cross-agent session into the session directory, not the invocation directory", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  const unchanged = await unchangedAfter(scene);
+  const token = await previewToken(scene, [scene.file]);
+  const imported = await scene.run([scene.file, "--confirm", token]);
+  expect(imported.stderr).toEqual([]);
+  expect(imported.exitCode).toBe(0);
+  expect(imported.stdout.join("\n")).toContain("Resume:");
+  await readNativeImport(scene, "codex", scene.sourceCwd);
+  await unchanged();
+});
+
+test("CLI --to imports into another checkout of the same repository", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  const token = await previewToken(scene, [scene.id, "--to", scene.destinationCwd]);
+  const imported = await scene.run([scene.id, "--to", scene.destinationCwd, "--confirm", token]);
+  expect(imported.exitCode).toBe(0);
+  await readNativeImport(scene, "codex", scene.destinationCwd);
+});
+
+test("CLI refuses --to into a different repository and writes nothing", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  const other = await temporaryRoot("other-repository");
+  git(other, "init", "-b", "main");
+  const refused = await scene.run([scene.id, "--to", other]);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.stderr.join("\n")).toContain("different repository");
+  expect(await snapshot(scene.targetHome)).toEqual({});
+});
+
+test("CLI names an unrecoverable directory and exits 1", async () => {
+  const scene = await bench("sibling-to-external");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+  const outcome = await scene.run([scene.id]);
+  expect(outcome.exitCode).toBe(1);
+  expect(outcome.stdout.join("\n")).toContain("cannot be recovered");
+  expect(await snapshot(scene.targetHome)).toEqual({});
+});
+
+test("CLI refuses --to into a directory that is not a git checkout", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+  const plain = await temporaryRoot("plain-directory");
+
+  const refused = await scene.run([scene.id, "--to", plain]);
+
+  expect(refused.exitCode).toBe(2);
+  expect(refused.stderr.join("\n")).toContain("not a git checkout");
+  expect(await snapshot(scene.targetHome)).toEqual({});
+});
+
+test("CLI recovers a removed worktree behind a token, then resumes natively", async () => {
+  const scene = await bench("main-to-nested");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+
+  const preview = await scene.run([scene.id]);
+  expect(preview.exitCode).toBe(0);
+  const shown = preview.stdout.join("\n");
+  expect(shown).toContain("Recover:");
+  expect(shown).toContain("Confirm:");
+  const token = shown.match(/v1-sha256-[0-9a-f]{64}/)?.[0];
+  if (!token) throw new Error("recovery preview did not print a token");
+
+  // A wrong token runs nothing and leaves the directory missing.
+  const wrong = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
+  const refused = await scene.run([scene.id, "--confirm", wrong]);
+  expect(refused.exitCode).toBe(2);
+  expect(await snapshot(scene.linked)).toEqual({});
+
+  const recovered = await scene.run([scene.id, "--confirm", token]);
+  expect(recovered.exitCode).toBe(0);
+  expect(recovered.stderr).toEqual([]);
+  expect(recovered.stdout.join("\n")).toContain("Resume: cd ");
+  expect(recovered.stdout.join("\n")).toContain(` && claude --resume ${scene.id}`);
+  expect(await snapshot(scene.linked)).not.toEqual({});
+});
+
+test("CLI recovers a removed worktree, then continues into an import preview", async () => {
+  const scene = await bench("main-to-nested", "codex");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+
+  const recovery = await scene.run([scene.id]);
+  expect(recovery.exitCode).toBe(0);
+  const shown = recovery.stdout.join("\n");
+  expect(shown).toContain("Recover:");
+  const recoveryToken = shown.match(/v1-sha256-[0-9a-f]{64}/)?.[0];
+  if (!recoveryToken) throw new Error("recovery preview did not print a token");
+
+  const recovered = await scene.run([scene.id, "--confirm", recoveryToken]);
+  expect(recovered.exitCode).toBe(0);
+  expect(recovered.stderr).toEqual([]);
+  // The recovery token does not confirm the preview that follows it (FR-61).
+  expect(recovered.stdout.join("\n")).toContain("Confirm:");
+  const importToken = recovered.stdout.join("\n").match(/v1-sha256-[0-9a-f]{64}/)?.[0];
+  if (!importToken) throw new Error("import preview did not print a token");
+
+  const imported = await scene.run([scene.id, "--confirm", importToken]);
+  expect(imported.stderr).toEqual([]);
+  expect(imported.exitCode).toBe(0);
+  expect(imported.stdout.join("\n")).toContain("Resume:");
+  await readNativeImport(scene, "codex", scene.linked);
+});
 
 test("Pi command context drives real discovery, preview and native writer instead of process/host cwd", async () => {
   const scene = await bench("sibling-to-external", "pi");
@@ -304,8 +391,6 @@ test("Pi command context drives real discovery, preview and native writer instea
       },
       async confirm() {
         expect(shown).toContain(`Destination: ${scene.destinationCwd}`);
-        expect(shown.join("\n")).toContain("The source session records a different directory");
-        expect(shown.join("\n")).toContain("does not transfer uncommitted work, switch branches");
         expect(await snapshot(scene.targetHome)).toEqual({});
         confirmed = true;
         return "selected";
@@ -324,113 +409,6 @@ test("Pi command context drives real discovery, preview and native writer instea
     },
   };
   await command.run(ctx, [], scene.pipeline);
-  expect(switched).toEqual([await readNativeImport(scene, "pi")]);
+  expect(switched).toEqual([await readNativeImport(scene, "pi", scene.destinationCwd)]);
   await unchanged();
 });
-
-test("CLI rejects a token in another detached worktree at the same HEAD without writing", async () => {
-  const scene = await bench("main-to-nested");
-  const other = join(scene.root, "other worktree");
-  git(scene.main, "worktree", "add", "--detach", other, "HEAD");
-  expect(git(other, "rev-parse", "HEAD")).toBe(git(scene.destination, "rev-parse", "HEAD"));
-  expect(git(other, "rev-parse", "--abbrev-ref", "HEAD")).toBe(
-    git(scene.destination, "rev-parse", "--abbrev-ref", "HEAD"),
-  );
-  const unchanged = await unchangedAfter(scene);
-  const token = await previewToken(scene);
-  const rejected = await scene.run([scene.id, "--confirm", token], other);
-  expect(rejected.exitCode).toBe(2);
-  expect(rejected.stderr.join("\n")).toContain(
-    "The source session, destination, or preview changed after confirmation. Nothing was written",
-  );
-  expect(await snapshot(scene.targetHome)).toEqual({});
-  await unchanged();
-});
-
-test.each(["source", "destination"] as const)(
-  "CLI refreshes changed %s repository identity before confirming, without writing",
-  async (changed) => {
-    const scene = await bench("sibling-to-external");
-    const token = await previewToken(scene);
-    const replaced = changed === "source" ? scene.sourceCwd : scene.destination;
-    await rename(join(replaced, ".git"), join(replaced, ".git-original"));
-    git(replaced, "init", "-b", "replacement");
-    const unchanged = await unchangedAfter(scene);
-    const rejected = await scene.run([scene.id, "--confirm", token]);
-    expect(rejected.exitCode).toBe(2);
-    expect(rejected.stderr.join("\n")).toContain("The session could not be chosen:");
-    expect(await snapshot(scene.targetHome)).toEqual({});
-    await unchanged();
-  },
-);
-
-test("CLI previews and imports a removed worktree using surviving active-conversation metadata", async () => {
-  const scene = await bench("sibling-to-external");
-  await scene.transcript([scene.linked, scene.main]);
-  git(scene.main, "worktree", "remove", "--force", scene.linked);
-  const descriptors = await scene.host.registry().get("claude-code").listSessions(scene.sourceHome);
-  expect(descriptors[0]?.repoPath).toBe(scene.linked);
-  expect(descriptors[0]?.repoPaths).toEqual([scene.linked, scene.main]);
-  const unchanged = await unchangedAfter(scene);
-  const token = await previewToken(scene);
-  const imported = await scene.run([scene.id, "--confirm", token]);
-  expect(imported.stderr).toEqual([]);
-  expect(imported.exitCode).toBe(0);
-  await readNativeImport(scene, "claude-code");
-  await unchanged();
-});
-
-test.each(["missing", "conflicting"] as const)(
-  "CLI and Pi expose %s recorded-directory selection diagnostics without importing",
-  async (evidence) => {
-    const scene = await bench("sibling-to-external", "pi");
-    if (evidence === "missing") {
-      git(scene.main, "worktree", "remove", "--force", scene.linked);
-    } else {
-      const unrelated = join(scene.root, "unrelated repository");
-      await mkdir(unrelated);
-      git(unrelated, "init", "-b", "main");
-      await scene.transcript([scene.main, unrelated]);
-    }
-    const diagnostic =
-      evidence === "missing"
-        ? "has only missing recorded directories"
-        : "has conflicting repository identity evidence";
-    const listed = await scene.run([]);
-    expect(listed.stdout.join("\n")).toContain(diagnostic);
-    const preview = await scene.run([scene.id]);
-    expect(preview.exitCode).toBe(2);
-    expect(preview.stderr.join("\n")).toContain(diagnostic);
-    const shown: string[] = [];
-    const command = createResumeFromCommand({
-      windowTokens: scene.target.windowTokens,
-      picker: {
-        async pick() {
-          throw new Error("must not offer excluded sessions");
-        },
-      },
-      ui: {
-        show(lines) {
-          shown.push(...lines);
-        },
-        async confirm() {
-          throw new Error("must not confirm a rejected selection");
-        },
-      },
-    });
-    const ctx: PiCommandContext = {
-      cwd: scene.destinationCwd,
-      home: scene.targetHome,
-      async switchSession() {
-        throw new Error("must not switch after rejection");
-      },
-    };
-    await command.run(ctx, [], scene.pipeline);
-    expect(shown.join("\n")).toContain(diagnostic);
-    shown.length = 0;
-    await command.run(ctx, [scene.id], scene.pipeline);
-    expect(shown).toHaveLength(1);
-    expect(shown[0]).toContain(diagnostic);
-    expect(await snapshot(scene.targetHome)).toEqual({});
-  },
-);

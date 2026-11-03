@@ -169,8 +169,8 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
     describeSession(_filePath: string): Promise<SessionDescriptor> {
       return Promise.reject(new Error("not a source"));
     },
-    resumeCommand(): string {
-      return "resume";
+    resumeCommand(input): string {
+      return `${agent} --resume ${input.sessionId}`;
     },
     serialize(
       session: CanonicalSession,
@@ -795,8 +795,7 @@ describe("boundary", () => {
   });
 
   it("T-LAN-15 keeps the session when the switch fails", async () => {
-    const command = `open --session ${SESSION_ID}`;
-    const lander = createSessionLander({ handoverCommand: () => command });
+    const lander = createSessionLander();
 
     const failure = await failureOf(
       lander.land(
@@ -811,7 +810,7 @@ describe("boundary", () => {
 
     expect(failure.stage).toBe("switch");
     expect(failure.rolledBack).toBe(false);
-    expect(failure.message).toContain(command);
+    expect(failure.message).toContain(`claude-code --resume ${SESSION_ID}`);
     const files = (await snapshot(home)).filter((line) => line.startsWith("f "));
     expect(files).toHaveLength(1);
   });
@@ -1031,9 +1030,7 @@ describe("behavior", () => {
   });
 
   it("T-LAN-22 tells a create-only user exactly what to type", async () => {
-    const lander = createSessionLander({
-      handoverCommand: (_agent, sessionId) => `claude --resume ${sessionId}`,
-    });
+    const lander = createSessionLander();
 
     const result = await lander.land(
       makePlan(home),
@@ -1046,7 +1043,7 @@ describe("behavior", () => {
 
     expect(result.handover).toEqual({
       sessionId: "abc-123",
-      command: "claude --resume abc-123",
+      command: "claude-code --resume abc-123",
     });
   });
 });

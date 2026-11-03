@@ -7,7 +7,9 @@ import type {
   ListRequest,
   PiCommandContext,
   PiResumeFromCommand,
+  Place,
   SelectionInput,
+  SessionDescriptor,
   SessionPicker,
   TargetProfile,
 } from "./contract.js";
@@ -21,11 +23,11 @@ const CONFIRM_QUESTION = "Import this session? (y/N)";
 const CANCELLED_LINE = "Cancelled. Nothing was imported.";
 const HELP_ARGUMENTS = new Set(["help", "-h", "--help"]);
 const HELP_LINES = [
-  `Usage: /${RESUME_FROM_COMMAND_NAME} [<session-id> | <file-path>]`,
+  `Usage: /${RESUME_FROM_COMMAND_NAME} [<id-or-prefix> | <file-path>]`,
   "No argument opens the session selector.",
-  "<session-id> previews the matching session.",
-  "<file-path> previews an absolute or relative session file.",
-  "Pi asks for confirmation before importing anything.",
+  "<id-or-prefix> restores the matching session from anywhere.",
+  "<file-path> restores an absolute or relative session file.",
+  "A Pi session in this directory switches in place; anything else asks before writing.",
 ];
 const USAGE_LINE = HELP_LINES[0] ?? `Usage: /${RESUME_FROM_COMMAND_NAME}`;
 const BLOCKED_FALLBACK = "The import is blocked.";
@@ -63,10 +65,152 @@ async function runResumeFrom(
     onlyHome: null,
   };
 
-  const selection = await resolveSelection(deps, args, pipeline, scope);
-  if (selection === null) return;
+  const given = args.filter((argument) => argument.trim().length > 0);
+  if (given.length === 1 && HELP_ARGUMENTS.has(given[0] ?? "")) {
+    deps.ui.show(HELP_LINES);
+    return;
+  }
+  if (given.length > 1) {
+    deps.ui.show([USAGE_LINE]);
+    return;
+  }
+  if (given.length === 1 && given[0] !== undefined) {
+    // An explicit selector restores it in place, natively when it is already a Pi session.
+    await restore(deps, ctx, parseArgument(given[0]), pipeline);
+    return;
+  }
 
-  const request: ImportRequest = { ...scope, selection };
+  const selection = await chooseSession(deps, pipeline, scope);
+  if (selection === null) return;
+  await importSelection(deps, ctx, pipeline, scope, selection);
+}
+
+/** Restores an explicitly named session: recovery gate, then native switch or import (FR-61). */
+async function restore(
+  deps: ResumeFromDeps,
+  ctx: PiCommandContext,
+  selection: SelectionInput,
+  pipeline: ImportPipeline,
+): Promise<void> {
+  const descriptor = await withDiagnostic(deps.ui, "lookup", () =>
+    pipeline.locate({ selection, cwd: ctx.cwd, onlyAgent: null, onlyHome: null }),
+  );
+  if (descriptor === null) return;
+
+  let place = await withDiagnostic(deps.ui, "place", () => pipeline.place(descriptor));
+  if (place === null) return;
+
+  if (place.state === "unrecoverable") {
+    deps.ui.show([
+      ...summaryLines(descriptor, place),
+      `The directory cannot be recovered: ${place.reason ?? "no repository was found"}`,
+    ]);
+    return;
+  }
+
+  if (place.state === "recoverable") {
+    const token = pipeline.recoveryToken(descriptor, place);
+    if (token === null) {
+      deps.ui.show(["The recovery plan could not be bound to a confirmation token."]);
+      return;
+    }
+    deps.ui.show([...summaryLines(descriptor, place), ...recoveryLines(place)]);
+    if ((await deps.ui.confirm(CONFIRM_QUESTION.replace("Import", "Recreate"))) !== "selected") {
+      deps.ui.show([CANCELLED_LINE]);
+      return;
+    }
+    const result = await withDiagnostic(deps.ui, "recovery", () =>
+      pipeline.recover(descriptor, place as Place, token),
+    );
+    if (result === null) return;
+    if (!result.ok) {
+      deps.ui.show([result.message ?? "The recovery failed."]);
+      return;
+    }
+    const rechecked = await withDiagnostic(deps.ui, "place", () => pipeline.place(descriptor));
+    if (rechecked === null) return;
+    place = rechecked;
+    if (place.state !== "present") {
+      deps.ui.show([`The recovery reported success, but ${place.directory} is not usable.`]);
+      return;
+    }
+  }
+
+  const target = targetOf(deps, ctx);
+  if (descriptor.ref.agent === target.agent) {
+    // Native: the original file, switched in-process only when it is this directory (FR-61).
+    if (place.directory === ctx.cwd) {
+      const outcome = await withDiagnostic(deps.ui, "switch", () =>
+        pipeline.switchTo(descriptor, ctx),
+      );
+      if (outcome === null || outcome.switched) return;
+    }
+    showResume(deps.ui, pipeline, descriptor, place);
+    return;
+  }
+
+  await importLocated(deps, ctx, pipeline, descriptor, selection);
+}
+
+/** Imports a located descriptor; switches only when the destination is Pi's own directory. */
+async function importLocated(
+  deps: ResumeFromDeps,
+  ctx: PiCommandContext,
+  pipeline: ImportPipeline,
+  descriptor: SessionDescriptor,
+  selection: SelectionInput,
+): Promise<void> {
+  const destination = await withDiagnostic(deps.ui, "destination", () =>
+    pipeline.destinationFor(descriptor, null),
+  );
+  if (destination === null) return;
+
+  const request: ImportRequest = {
+    destinationCwd: destination.directory,
+    target: targetOf(deps, ctx),
+    selection,
+    located: descriptor,
+    onlyAgent: null,
+    onlyHome: null,
+  };
+  const report = await withDiagnostic(deps.ui, "preview", () => pipeline.preview(request));
+  if (report === null) return;
+  deps.ui.show(report.lines); // Verbatim and unreordered (FR-21).
+
+  if (report.blocked) {
+    deps.ui.show([report.blockedReason ?? BLOCKED_FALLBACK]);
+    return; // A blocked preview is never offered for confirmation (FR-33).
+  }
+  if ((await deps.ui.confirm(CONFIRM_QUESTION)) !== "selected") {
+    deps.ui.show([CANCELLED_LINE]);
+    return; // Nothing is written before the user confirms (FR-16, FR-20).
+  }
+  if (destination.warning !== null) deps.ui.show([`⚠ ${destination.warning}`]);
+
+  // Pi's context is the runtime only when the new session lands in the directory Pi is in;
+  // otherwise the import is create-only and the Resume command is shown (FR-61).
+  const runtime = destination.directory === ctx.cwd ? ctx : null;
+  const landing = await withDiagnostic(deps.ui, "import", () =>
+    pipeline.commit(request, runtime, report.confirmationToken),
+  );
+  if (landing !== null && !landing.switched) present(deps.ui, landing);
+}
+
+/** The existing no-argument flow: list, pick, preview and import into this directory. */
+async function importSelection(
+  deps: ResumeFromDeps,
+  ctx: PiCommandContext,
+  pipeline: ImportPipeline,
+  scope: ListRequest,
+  selection: SelectionInput,
+): Promise<void> {
+  const request: ImportRequest = {
+    destinationCwd: scope.destinationCwd,
+    target: targetOf(deps, ctx),
+    selection,
+    onlyAgent: scope.onlyAgent,
+    onlyHome: scope.onlyHome,
+  };
   const report = await withDiagnostic(deps.ui, "preview", () => pipeline.preview(request));
   if (report === null) return;
   deps.ui.show(report.lines); // Verbatim and unreordered (FR-21).
@@ -86,6 +230,33 @@ async function runResumeFrom(
     pipeline.commit(request, ctx, report.confirmationToken),
   );
   if (landing !== null && !landing.switched) present(deps.ui, landing);
+}
+
+/** Summary lines for the restore output Pi shows above a command or a question (FR-61). */
+function summaryLines(descriptor: SessionDescriptor, place: Place): string[] {
+  const directory = place.directory === "" ? "(no recorded directory)" : place.directory;
+  const branch = place.branch ?? "no branch";
+  return [
+    `↻ ${safeText(descriptor.ref.agent)} ${safeText(descriptor.ref.id).slice(0, 8)} · ${safeText(descriptor.ref.home)}`,
+    `  ${safeText(directory)} · ${safeText(branch)}`,
+    ...place.warnings.map((warning) => `⚠ ${safeText(warning)}`),
+  ];
+}
+
+function recoveryLines(place: Place): string[] {
+  return (place.recovery?.commands ?? []).map((command) => `Recover: ${command.display}`);
+}
+
+function showResume(
+  ui: PiUi,
+  pipeline: ImportPipeline,
+  descriptor: SessionDescriptor,
+  place: Place,
+): void {
+  ui.show([
+    ...summaryLines(descriptor, place),
+    `Resume: ${pipeline.resumeCommand(descriptor, place.directory, null)}`,
+  ]);
 }
 
 /** Catch only pipeline failures, not UI errors or presentation after a successful switch. */
@@ -119,24 +290,11 @@ function targetOf(deps: ResumeFromDeps, ctx: PiCommandContext): TargetProfile {
 }
 
 /** The selection, or null when the user cancelled or there was nothing to pick. */
-async function resolveSelection(
+async function chooseSession(
   deps: ResumeFromDeps,
-  args: string[],
   pipeline: ImportPipeline,
   scope: ListRequest,
 ): Promise<SelectionInput | null> {
-  const given = args.filter((argument) => argument.trim().length > 0);
-  if (given.length === 1 && HELP_ARGUMENTS.has(given[0] ?? "")) {
-    deps.ui.show(HELP_LINES);
-    return null;
-  }
-  if (given.length > 1) {
-    deps.ui.show([USAGE_LINE]);
-    return null;
-  }
-  const [only] = given;
-  if (only !== undefined) return parseArgument(only); // An argument skips the picker (FR-12).
-
   const listing = await withDiagnostic(deps.ui, "listing", () => pipeline.list(scope));
   if (listing === null) return null;
   if (listing.failures.length > 0) {
@@ -179,5 +337,5 @@ function present(ui: PiUi, landing: LandingResult): void {
 }
 
 function formatHandover(handover: HandoverInstruction): string[] {
-  return [`The session is ready: ${handover.sessionId}`, `Open it with: ${handover.command}`];
+  return [`Resume: ${handover.command}`];
 }

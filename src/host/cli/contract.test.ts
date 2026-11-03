@@ -64,9 +64,7 @@ describe("T-CLI-10 the landing outcome is printed", () => {
       pipeline,
     );
 
-    const printed = outcome.stdout.join("\n");
-    expect(printed).toContain(result.ref.id);
-    expect(outcome.stdout).toContainEqual(expect.stringContaining("claude --resume new-session-7"));
+    expect(outcome.stdout).toContain("Resume: claude --resume new-session-7");
     for (const line of result.marker.lines) {
       expect(outcome.stdout).toContain(line);
     }
