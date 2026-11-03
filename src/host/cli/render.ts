@@ -13,7 +13,11 @@ export function renderWarnings(warnings: readonly string[]): string[] {
 
 /** The native mode output: summary, warnings, and the command that resumes the session. */
 export function renderNative(summary: string[], place: Place, command: string): string[] {
-  return [...summary.map(safeText), ...renderWarnings(place.warnings), `Resume: ${command}`];
+  return [
+    ...summary.map(safeText),
+    ...renderWarnings(place.warnings),
+    `Resume: ${safeText(command)}`,
+  ];
 }
 
 /** The output before a recovery runs: summary, warnings, each command, and the re-run token. */
@@ -22,8 +26,8 @@ export function renderRecovery(summary: string[], place: Place, confirmCommand: 
   return [
     ...summary.map(safeText),
     ...renderWarnings(place.warnings),
-    ...commands.map((command) => `Recover: ${command.display}`),
-    `Confirm: ${confirmCommand}`,
+    ...commands.map((command) => `Recover: ${safeText(command.display)}`),
+    `Confirm: ${safeText(confirmCommand)}`,
   ];
 }
 

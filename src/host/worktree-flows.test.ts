@@ -171,7 +171,13 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
   const runner = createCliRunner(target);
   const run = (args: string[], cwd = destinationCwd) =>
     runner.run(
-      { cwd, argv: ["claude", "--home", sourceHome, ...args], targetAgent: agent, targetHome },
+      {
+        cwd,
+        argv: ["claude", "--home", sourceHome, ...args],
+        targetAgent: agent,
+        targetHome,
+        plugin: true,
+      },
       pipeline,
     );
   return {

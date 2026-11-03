@@ -14,7 +14,7 @@ If the instructions ask for a new or different worktree, create it first with `g
 
 Run the tool once. Pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code -- <selector> [<options>]
+    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code --plugin -- <selector> [<options>]
 
 If the output contains `Confirm:` and the user did not ask for a preview or dry run, run that exact command. Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 

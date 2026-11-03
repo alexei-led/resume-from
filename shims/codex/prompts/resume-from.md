@@ -10,7 +10,7 @@ If the instructions ask for a new or different worktree, create it first with `g
 
 Run the command once. Pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-    npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex -- <selector> [<options>]
+    npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --plugin -- <selector> [<options>]
 
 If the output contains `Confirm:` and the user did not ask for a preview or dry run, run that exact command. Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 

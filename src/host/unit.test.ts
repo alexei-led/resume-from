@@ -200,6 +200,7 @@ describe("the target profile", () => {
         cwd: "/cwd",
         targetAgent: agent,
         targetHome: "~/alt-home",
+        plugin: true,
       },
       pipeline,
     );

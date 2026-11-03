@@ -31,6 +31,7 @@ describe("command help", () => {
       value: {
         targetAgent: null,
         targetHome: null,
+        plugin: false,
         rest: ["dc601a22", "--prompt", "go on"],
       },
     });
@@ -55,7 +56,20 @@ describe("trusted shim arguments", () => {
       value: {
         targetAgent: "codex",
         targetHome: "/home/with space",
+        plugin: false,
         rest: ["1", "--target-agent", "claude-code"],
+      },
+    });
+  });
+
+  it("records the plugin marker the installed host command passes", () => {
+    expect(readShimArgs(["--target-agent", "codex", "--plugin", "--", "1"])).toEqual({
+      ok: true,
+      value: {
+        targetAgent: "codex",
+        targetHome: null,
+        plugin: true,
+        rest: ["1"],
       },
     });
   });
@@ -64,6 +78,8 @@ describe("trusted shim arguments", () => {
     ["duplicate target", ["--target-agent", "codex", "--target-agent", "pi", "--"]],
     ["missing value", ["--target-agent", "--"]],
     ["a target home with no target", ["--target-home", "/home/x", "--"]],
+    ["a plugin marker with no target", ["--plugin", "--"]],
+    ["duplicate plugin markers", ["--target-agent", "codex", "--plugin", "--plugin", "--"]],
   ])("rejects %s", (_name, argv) => {
     expect(readShimArgs(argv)).toMatchObject({ ok: false });
   });
@@ -71,7 +87,12 @@ describe("trusted shim arguments", () => {
   it("treats a missing delimiter as a bare shell, not an error", () => {
     expect(readShimArgs(["--target-agent", "codex"])).toEqual({
       ok: true,
-      value: { targetAgent: null, targetHome: null, rest: ["--target-agent", "codex"] },
+      value: {
+        targetAgent: null,
+        targetHome: null,
+        plugin: false,
+        rest: ["--target-agent", "codex"],
+      },
     });
   });
 });

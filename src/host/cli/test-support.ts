@@ -106,6 +106,7 @@ export function invocation(overrides: Partial<CliInvocation> = {}): CliInvocatio
     cwd: REPO_ROOT,
     targetAgent: "claude-code",
     targetHome: null,
+    plugin: true,
     ...overrides,
   };
 }

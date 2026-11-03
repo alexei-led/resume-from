@@ -42,5 +42,13 @@ test("the Codex prompt keeps the pinned package prefix", async () => {
     new URL("../../../shims/codex/prompts/resume-from.md", import.meta.url),
     "utf8",
   );
-  expect(text).toContain("npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --");
+  expect(text).toContain(
+    "npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --plugin --",
+  );
+});
+
+test.each(SHIMS)("%s tells the tool it runs inside an installed host command", async (path) => {
+  const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
+  expect(text).toContain("--target-agent");
+  expect(text).toContain("--plugin --");
 });

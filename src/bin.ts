@@ -18,6 +18,8 @@ import { runCommandBinary } from "./index.js";
 const TARGET_AGENT = "--target-agent";
 const TARGET_HOME = "--target-home";
 const USER_ARGUMENTS = "--";
+/** Hidden: an installed agent command passes it, so `Confirm:` re-runs use `/resume-from`. */
+const PLUGIN_FLAG = "--plugin";
 
 const USAGE =
   `Usage: resume-from <id-or-prefix> [options]\n` +
@@ -56,6 +58,11 @@ export interface ShimArgs {
   targetAgent: string | null;
   /** The home that agent is running, or null to use the adapter's declared default (FR-3). */
   targetHome: string | null;
+  /**
+   * True when an installed agent command supplied the target, rather than a person importing
+   * from a shell. It decides whether a `Confirm:` line is a slash command or a shell command.
+   */
+  plugin: boolean;
   /** Everything else, in the order it was given. The host's own parser reads it. */
   rest: string[];
 }
@@ -73,9 +80,13 @@ export type ShimArgsResult = { ok: true; value: ShimArgs } | { ok: false; proble
 export function readShimArgs(argv: string[]): ShimArgsResult {
   let targetAgent: string | null = null;
   let targetHome: string | null = null;
+  let plugin = false;
   const separator = argv.indexOf(USER_ARGUMENTS);
   if (separator < 0) {
-    return { ok: true, value: { targetAgent: null, targetHome: null, rest: [...argv] } };
+    return {
+      ok: true,
+      value: { targetAgent: null, targetHome: null, plugin: false, rest: [...argv] },
+    };
   }
 
   const trusted = argv.slice(0, separator);
@@ -84,6 +95,12 @@ export function readShimArgs(argv: string[]): ShimArgsResult {
   for (let index = 0; index < trusted.length; index += 1) {
     const arg = trusted[index];
     if (arg === undefined) continue;
+
+    if (arg === PLUGIN_FLAG) {
+      if (plugin) return { ok: false, problem: `${PLUGIN_FLAG} was given twice by the shim.` };
+      plugin = true;
+      continue;
+    }
 
     const named = [TARGET_AGENT, TARGET_HOME].find(
       (flag) => arg === flag || arg.startsWith(`${flag}=`),
@@ -123,8 +140,11 @@ export function readShimArgs(argv: string[]): ShimArgsResult {
   if (targetHome !== null && targetAgent === null) {
     return { ok: false, problem: `${TARGET_HOME} needs ${TARGET_AGENT} before ${USER_ARGUMENTS}.` };
   }
+  if (plugin && targetAgent === null) {
+    return { ok: false, problem: `${PLUGIN_FLAG} needs ${TARGET_AGENT} before ${USER_ARGUMENTS}.` };
+  }
 
-  return { ok: true, value: { targetAgent, targetHome, rest } };
+  return { ok: true, value: { targetAgent, targetHome, plugin, rest } };
 }
 
 export async function main(argv: string[], cwd: string): Promise<number> {
@@ -138,7 +158,7 @@ export async function main(argv: string[], cwd: string): Promise<number> {
     process.stderr.write(`${parsed.problem}\n${USAGE}\nRun resume-from --help for details.\n`);
     return 2;
   }
-  const { targetAgent, targetHome, rest } = parsed.value;
+  const { targetAgent, targetHome, plugin, rest } = parsed.value;
   const bareShell = targetAgent === null;
 
   const outcome = await runCommandBinary({
@@ -147,6 +167,7 @@ export async function main(argv: string[], cwd: string): Promise<number> {
     // Unchecked on purpose: the registry knows which agents exist and says so (FR-56).
     targetAgent: targetAgent === null ? null : (targetAgent as AgentId),
     targetHome: targetHome as HomePath | null,
+    plugin,
   });
 
   // Dim only the summary lines, only in a bare shell on a terminal the user can colour (FR-61).

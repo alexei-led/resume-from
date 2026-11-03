@@ -299,9 +299,10 @@ interface AgentAdapter {
 
   /**
    * Source role. Directories or glob patterns where this agent keeps session files, including
-   * homes named by its environment. A global lookup expands them (FR-61).
+   * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
+   * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(): string[];
+  searchRoots(home?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
@@ -678,6 +679,12 @@ interface CliInvocation {
   targetAgent: AgentId | null;
   /** The target home, when the shim knows it. Otherwise the adapter default is used (FR-3). */
   targetHome: HomePath | null;
+  /**
+   * True when an installed agent command (the shim) supplied the target, rather than a person
+   * importing from a shell. A `Confirm:` re-run then uses the host's `/resume-from` command;
+   * otherwise it is a runnable `resume-from ...` shell command (FR-66).
+   */
+  plugin: boolean;
 }
 
 /** 0 success, 1 refused, 2 error (FR-56). */

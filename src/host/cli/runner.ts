@@ -298,7 +298,7 @@ async function importFlow(
   } catch (error) {
     return failure(
       `Could not open the preview: ${messageOf(error)}`,
-      'Run "/resume-from" to see the numbered list again.',
+      `Run ${renderCommand(invocation, [])} to see the numbered list again.`,
     );
   }
 
@@ -355,8 +355,16 @@ function withoutConfirmation(argv: string[]): string[] {
 }
 
 function renderCommand(invocation: CliInvocation, argv: string[]): string {
-  const name = invocation.targetAgent === null ? "resume-from" : "/resume-from";
-  return [name, ...argv].map(quoteArgument).join(" ");
+  // A plugin re-run is the host's own command; a manual shell invocation must stay runnable
+  // there, which means repeating the shim flags the person wrote (FR-66).
+  if (invocation.plugin) return ["/resume-from", ...argv].map(quoteArgument).join(" ");
+  const shim: string[] = [];
+  if (invocation.targetAgent !== null) {
+    shim.push("--target-agent", invocation.targetAgent);
+    if (invocation.targetHome !== null) shim.push("--target-home", invocation.targetHome);
+  }
+  const separator = shim.length > 0 ? ["--"] : [];
+  return ["resume-from", ...shim, ...separator, ...argv].map(quoteArgument).join(" ");
 }
 
 function quoteArgument(argument: string): string {
@@ -365,10 +373,15 @@ function quoteArgument(argument: string): string {
 }
 
 function messageOf(error: unknown): string {
-  if (typeof error === "string") return safeText(error);
-  if (typeof error === "object" && error !== null && "message" in error) {
+  let text: string;
+  if (typeof error === "string") text = error;
+  else if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message: unknown }).message;
-    if (typeof message === "string") return safeText(message);
+    text = typeof message === "string" ? message : String(error);
+  } else {
+    text = String(error);
   }
-  return safeText(String(error));
+  // Sanitise each line on its own: a candidate list is multi-line on purpose, and collapsing
+  // the line breaks would print every candidate as one unreadable run-on line.
+  return text.split("\n").map(safeText).join("\n");
 }
