@@ -109,7 +109,7 @@ describe("recovery planning and execution", () => {
     expect(plan.commands.map((command) => command.argv)).toEqual([
       ["worktree", "add", "--detach", directory, head],
     ]);
-    expect(plan.note).toContain("branch gone no longer exists");
+    expect(plan.warnings.join(" ")).toContain("branch gone no longer exists");
     expect((await createWorktreeRecovery().recover(plan)).ok).toBe(true);
     expect(await git(directory, ["rev-parse", "HEAD"])).toBe(head);
   });
@@ -171,7 +171,6 @@ describe("recovery planning and execution", () => {
       directory: join(dir, "new"),
       commands: [{ cwd: dir, argv: ["fetch", "origin"], display: "git -C x fetch origin" }],
       warnings: [],
-      note: null,
     };
     const result = await planner.recover(plan);
     expect(result.ok).toBe(false);
@@ -192,7 +191,6 @@ describe("recovery planning and execution", () => {
         },
       ],
       warnings: [],
-      note: null,
     };
     const result = await createWorktreeRecovery().recover(plan);
     expect(result.ok).toBe(false);

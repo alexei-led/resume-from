@@ -175,7 +175,6 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
     const entries = await worktrees(repoRoot);
     const commands: RecoveryCommand[] = [];
     const warnings: string[] = [];
-    let note: string | null = null;
 
     // A stale registration of this exact directory blocks `worktree add`; prune it first.
     if (isPrunableRegistration(entries, directory)) {
@@ -212,7 +211,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
         );
       } else if (commit !== null && (await commitExists(repoRoot, commit))) {
         commands.push(command(repoRoot, ["worktree", "add", "--detach", directory, commit]));
-        if (!local) note = `branch ${branch} no longer exists`;
+        if (!local) warnings.push(`branch ${branch} no longer exists`);
       } else {
         headFallback();
       }
@@ -222,7 +221,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       headFallback();
     }
 
-    return { repoRoot, directory, commands, warnings, note };
+    return { repoRoot, directory, commands, warnings };
   }
 
   return {

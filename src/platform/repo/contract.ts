@@ -68,9 +68,8 @@ export interface RecoverySteps {
   directory: string;
   /** In order; a prune precedes the add when the directory is a stale registration. */
   commands: RecoveryCommand[];
+  /** Every note about the chosen branch or commit, printed as an `⚠` line. */
   warnings: string[];
-  /** A note about the chosen branch or commit, when one applies. */
-  note: string | null;
 }
 
 /** Where a session's directory is, and what it would take to bring it back. */
