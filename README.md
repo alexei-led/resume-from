@@ -147,6 +147,10 @@ Options in the CLI, Claude Code, and Codex (Pi accepts a selector only):
 - `--prompt <text>` appends an initial prompt to the native resume command.
 - `--context` prints the conversation an import into the current agent would keep, read-only.
 
+`--to` and `--context` need an agent to act for: run them from the slash command or prompt, or from
+a shell as `resume-from --target-agent <agent> -- <selector> --to <dir>` (or `--context`). A bare
+`resume-from <selector> --to <dir>` is refused, because a bare shell only prints commands.
+
 `--agent` and `--home` still narrow the repository list and the lookup, but they are not needed to
 find a session by ID.
 

@@ -51,7 +51,8 @@ the collapsed view shows the first line:
 
 Pi accepts the selector only: `/resume-from <id-or-prefix>` or `/resume-from <file-path>`. Row
 numbers, `--to`, `--prompt`, and `--context` belong to the CLI, Claude Code, and Codex entry points;
-run `resume-from --help` for those.
+run `resume-from --help` for those. `--to` and `--context` need a target agent, so from a shell use
+`resume-from --target-agent <agent> -- <selector> --to <dir>` rather than a bare `--to`.
 
 ## Show command help
 
