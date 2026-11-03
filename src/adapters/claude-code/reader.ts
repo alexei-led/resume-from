@@ -496,10 +496,26 @@ export async function findSessions(root: string, query: string): Promise<Session
   return sortDescriptors(descriptors);
 }
 
+/**
+ * A Claude Code file names its session and gives every entry a `uuid`; a foreign JSONL (a Codex
+ * rollout, a Pi session) has neither shape. Only a file that identifies itself may be described
+ * by path, so the path lookup never claims another agent's file (FR-61).
+ */
+function identifiesClaudeSession(text: string): boolean {
+  return parseJsonl(text).entries.some(
+    (entry) => typeof entry.uuid === "string" && typeof entry.sessionId === "string",
+  );
+}
+
 /** One session file described directly, for selection by path (FR-12). */
 export async function describeSession(filePath: string): Promise<SessionDescriptor> {
-  const descriptor = await describeFileOnDisk(homeOfSessionFile(filePath), filePath);
-  if (descriptor === null) {
+  const home = homeOfSessionFile(filePath);
+  let identified = false;
+  const descriptor = await describeSessionFile(filePath, (text, modified) => {
+    identified = identifiesClaudeSession(text);
+    return describeFile(home, filePath, text, modified);
+  });
+  if (descriptor === null || !identified) {
     throw new Error(`cannot read Claude Code session file ${filePath}`);
   }
   return descriptor;

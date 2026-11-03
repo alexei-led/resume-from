@@ -46,6 +46,7 @@ import {
   changedPathsFromEntries,
   entriesToTurns,
   lastTimestamp,
+  type ParsedSessionFile,
   parseSessionText,
   resolveActiveEntries,
   titleFromEntries,
@@ -111,10 +112,9 @@ async function findSessionFile(home: HomePath, sessionId: SessionId): Promise<st
 function describe(
   home: HomePath,
   filePath: string,
-  text: string,
+  parsed: ParsedSessionFile,
   fileTime: string,
 ): SessionDescriptor {
-  const parsed = parseSessionText(text);
   const id = parsed.header?.id ?? sessionIdFromFileName(basename(filePath)) ?? basename(filePath);
   const ref = { agent: "pi" as const, home, id };
   const startedAt = toIsoUtc(parsed.header?.timestamp) ?? fileTime;
@@ -157,7 +157,7 @@ async function describeFileOnDisk(
   filePath: string,
 ): Promise<SessionDescriptor | null> {
   return await describeSessionFile(filePath, (text, modified) =>
-    describe(home, filePath, text, modified),
+    describe(home, filePath, parseSessionText(text), modified),
   );
 }
 
@@ -174,9 +174,24 @@ async function findPiSessions(root: string, query: string): Promise<SessionDescr
   return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+/**
+ * A Pi file starts with its `session` header; a foreign JSONL (a Codex rollout, a Claude Code
+ * transcript) has none. The header is the identification: later entries are accepted loosely by
+ * shape, so they alone cannot prove the format. Only an identified file may be described by path,
+ * so the lookup never claims another agent's file (FR-61).
+ */
+function identifiesPiSession(parsed: ParsedSessionFile): boolean {
+  return parsed.header !== null;
+}
+
 /** One session file described directly, for selection by path (FR-12). */
 async function describePiSession(filePath: string): Promise<SessionDescriptor> {
-  const descriptor = await describeFileOnDisk(homeOfSessionFile(filePath), filePath);
+  const home = homeOfSessionFile(filePath);
+  const descriptor = await describeSessionFile(filePath, (text, modified) => {
+    const parsed = parseSessionText(text);
+    if (!identifiesPiSession(parsed)) throw new Error(`not a Pi session file: ${filePath}`);
+    return describe(home, filePath, parsed, modified);
+  });
   if (descriptor === null) {
     throw new Error(`cannot read Pi session file ${filePath}`);
   }

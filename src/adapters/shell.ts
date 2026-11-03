@@ -28,6 +28,9 @@ interface ResumeCommandParts {
   prompt?: string | null;
 }
 
+/** The end-of-options marker every agent CLI accepts; needed when the prompt starts with `-`. */
+const END_OF_OPTIONS = "--";
+
 /** `cd <directory> && [NAME=<value>] <argv...> [<prompt>]`. */
 export function resumeCommandLine({
   directory,
@@ -35,7 +38,13 @@ export function resumeCommandLine({
   env = null,
   prompt = null,
 }: ResumeCommandParts): string {
-  const fullArgv = prompt === null || prompt === "" ? argv : [...argv, prompt];
+  // A prompt is one argv item, not a shell string: quoting cannot stop `-x` being read as an
+  // option. The agents' parsers end option scanning at `--`, so a prompt that looks like a
+  // flag is placed behind it.
+  const fullArgv =
+    prompt === null || prompt === ""
+      ? argv
+      : [...argv, ...(prompt.startsWith("-") ? [END_OF_OPTIONS] : []), prompt];
   const command = commandLine(fullArgv);
   const withEnv = env === null ? command : `${env.name}=${quoteArgument(env.value)} ${command}`;
   return `cd ${quoteArgument(directory)} && ${withEnv}`;

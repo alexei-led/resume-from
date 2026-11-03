@@ -10,10 +10,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createClaudeCodeAdapter } from "./claude-code/adapter.js";
 import { codexAdapterFactory } from "./codex/index.js";
 import { searchRoots as codexSearchRoots } from "./codex/rollout.js";
+import type { AgentAdapter } from "./contract.js";
 import { piUserDraft, writeFixtureSession } from "./pi/fixtures.js";
 import { searchRoots as piSearchRoots } from "./pi/format.js";
 import { piAdapterFactory } from "./pi/index.js";
 import {
+  type AdapterCase,
   CLAUDE_CODE_CASE,
   CODEX_CASE,
   cleanupHomes,
@@ -217,6 +219,44 @@ describe("describeSession describes one file directly", () => {
     expect(descriptor.ref.id).toBe(seeded.sessionId);
     expect(descriptor.ref.home).toBe(seeded.home);
   });
+
+  // A permissive reader would describe any readable JSONL as its own session. The path lookup
+  // offers a file outside every root to each adapter in turn, so only a positive identification
+  // may accept it (FR-61).
+  const foreign: { reader: () => AgentAdapter; source: AdapterCase }[] = [
+    {
+      reader: () => codexAdapterFactory.create(),
+      source: CLAUDE_CODE_CASE,
+    },
+    {
+      reader: () => piAdapterFactory.create(),
+      source: CLAUDE_CODE_CASE,
+    },
+    {
+      reader: () => piAdapterFactory.create(),
+      source: CODEX_CASE,
+    },
+    {
+      reader: () => createClaudeCodeAdapter({ env: {}, homeDir: HOME_HINT }),
+      source: CODEX_CASE,
+    },
+    {
+      reader: () => createClaudeCodeAdapter({ env: {}, homeDir: HOME_HINT }),
+      source: PI_CASE,
+    },
+    {
+      reader: () => codexAdapterFactory.create(),
+      source: PI_CASE,
+    },
+  ];
+
+  it.each(foreign)(
+    "rejects another agent's file instead of claiming it",
+    async ({ reader, source }) => {
+      const seeded = await seedSource(source, REFERENCE_SESSION);
+      await expect(reader().describeSession(seeded.filePath)).rejects.toThrow();
+    },
+  );
 });
 
 describe("resumeCommand renders a native, safely quoted command", () => {
@@ -281,5 +321,19 @@ describe("resumeCommand renders a native, safely quoted command", () => {
         prompt: "continue",
       }),
     ).toBe("cd /work/app && pi --session /homes/pi/sessions/--work-app--/x_id-1.jsonl continue");
+  });
+
+  it("ends option scanning before a prompt that starts with a dash", () => {
+    const adapter = claudeAdapter();
+    // Quoting cannot change argv parsing: without `--`, `--help` resumes as a flag.
+    expect(
+      adapter.resumeCommand({
+        home: adapter.capabilities().defaultHome,
+        directory: "/work/app",
+        sessionId: "id-1",
+        filePath: "/x/id-1.jsonl",
+        prompt: "--help",
+      }),
+    ).toBe("cd /work/app && claude --resume id-1 -- --help");
   });
 });
