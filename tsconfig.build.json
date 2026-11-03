@@ -4,7 +4,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "noEmit": false,
-    "sourceMap": false
+    "sourceMap": false,
+    "removeComments": true
   },
   "include": ["src/**/*.ts"],
   "exclude": [
