@@ -244,6 +244,32 @@ describe("T-CLI-25 the identifier flow", () => {
     expect(calls.preview[0]?.located).toEqual(located);
   });
 
+  it("sanitizes an unrecoverable summary before printing it", async () => {
+    const located = descriptor({
+      ref: { agent: "codex", home: "/Users/me/.codex", id: "sess-3" },
+      title: "owned\u001b[31m title",
+      startDirectory: "/gone/app",
+      repoPath: "/gone/app",
+    });
+    const { pipeline } = stubPipeline({
+      located,
+      place: {
+        state: "unrecoverable",
+        directory: "/gone/app",
+        branch: null,
+        warnings: [],
+        recovery: null,
+        reason: "no repository was found",
+      },
+    });
+
+    const outcome = await createCliRunner().run(invocation({ argv: [located.ref.id] }), pipeline);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stdout.join("\n")).not.toContain("\u001b");
+    expect(outcome.stdout.join("\n")).toContain("owned");
+  });
+
   it("refuses --to in a bare shell, which never imports", async () => {
     const { pipeline, calls } = stubPipeline();
 

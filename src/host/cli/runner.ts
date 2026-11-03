@@ -185,7 +185,7 @@ async function restoreFlow(
   if (place.state === "unrecoverable" && request.to === null) {
     return {
       stdout: [
-        ...pipeline.summary(descriptor, place),
+        ...pipeline.summary(descriptor, place).map(safeText),
         ...renderWarnings(place.warnings),
         ...(place.reason === null ? [] : [`⚠ ${safeText(place.reason)}`]),
       ],
