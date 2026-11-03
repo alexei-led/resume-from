@@ -294,6 +294,7 @@ those two points knows either name.
 | src/import/transfer → src/platform/config  | Contract | src          | 2    | 2        | Low         | Yes                | —      |
 | src/import/preview → src/platform/repo     | Contract | src          | 2    | 2        | Low         | Yes                | —      |
 | src/import/landing → src/platform/store    | Contract | src          | 2    | 2        | Low         | Yes                | —      |
+| src/import/landing → src/platform/repo     | Contract | src          | 2    | 2        | Low         | Yes                | —      |
 | src/platform → src/platform/config         | Contract | src/platform | 1    | 1        | Low         | Yes                | —      |
 | src/platform → src/platform/repo           | Contract | src/platform | 1    | 1        | Low         | Yes                | —      |
 | src/platform → src/platform/tokens         | Contract | src/platform | 1    | 1        | Low         | Yes                | —      |

@@ -8,9 +8,15 @@
 export const ENTRY_TYPE_USER = "user";
 export const ENTRY_TYPE_ASSISTANT = "assistant";
 export const ENTRY_TYPE_SUMMARY = "summary";
+/** The marker entry type Claude Code shows but excludes from model context (FR-47). */
+export const ENTRY_TYPE_SYSTEM = "system";
 
-/** The only entry types `serialize` writes (C-9). */
-export const WRITTEN_ENTRY_TYPES: readonly string[] = [ENTRY_TYPE_USER, ENTRY_TYPE_ASSISTANT];
+/** The entry types `serialize` writes: the marker, then turns (C-9, FR-47). */
+export const WRITTEN_ENTRY_TYPES: readonly string[] = [
+  ENTRY_TYPE_SYSTEM,
+  ENTRY_TYPE_USER,
+  ENTRY_TYPE_ASSISTANT,
+];
 
 export type RawEntry = Record<string, unknown>;
 

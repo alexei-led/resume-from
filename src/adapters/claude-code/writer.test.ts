@@ -23,10 +23,9 @@ const MARKER: ProvenanceMarker = {
   ],
 };
 
-/** The eight entry types of C-3 this adapter must never write. */
+/** The entry types of C-3 this adapter must never write besides its marker and turns. */
 const FORBIDDEN_ENTRY_TYPES = [
   "summary",
-  "system",
   "attachment",
   "file-history-snapshot",
   "file-history-delta",
@@ -60,9 +59,9 @@ describe("T-CC-4 — serialization writes two entry types and no more", () => {
     expect(entries.length).toBeGreaterThan(REFERENCE_SESSION.turns.length);
   });
 
-  it("writes only user and assistant entries (C-9)", () => {
+  it("writes the system marker and user and assistant turns (C-9, FR-47)", () => {
     const types = new Set(entries.map((entry) => entry.type));
-    expect([...types].sort()).toEqual(["assistant", "user"]);
+    expect([...types].sort()).toEqual(["assistant", "system", "user"]);
     for (const forbidden of FORBIDDEN_ENTRY_TYPES) {
       expect(types.has(forbidden)).toBe(false);
     }
@@ -92,12 +91,21 @@ describe("T-CC-4 — serialization writes two entry types and no more", () => {
     }
   });
 
-  it("shows the provenance marker as an out-of-context entry (FR-47, FR-48)", () => {
+  it("shows the provenance marker as one gray system entry outside model context (FR-47, FR-48)", () => {
     const first = entries[0];
-    expect(first?.type).toBe("user");
-    expect(first?.isMeta).toBe(true);
-    const message = first?.message as { content?: unknown };
-    expect(String(message.content)).toContain(MARKER.lines[0] as string);
+    expect(first?.type).toBe("system");
+    expect(first?.subtype).toBe("informational");
+    expect(first?.level).toBe("info");
+    expect(first?.isMeta).toBe(false);
+    expect(first?.message).toBeUndefined();
+    expect(String(first?.content)).toBe(MARKER.lines.join("\n"));
+  });
+
+  it("names an imported assistant model that resumes without a restore notice", () => {
+    for (const entry of entries.filter((item) => item.type === "assistant")) {
+      const message = entry.message as Record<string, unknown>;
+      expect(message.model).toBe("<synthetic>");
+    }
   });
 
   it("chains every entry to the one before it", () => {

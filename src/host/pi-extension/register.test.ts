@@ -36,6 +36,9 @@ describe("registration", () => {
       async place() {
         throw new Error("not reached");
       },
+      summary: () => {
+        throw new Error("not reached");
+      },
       recoveryToken: () => null,
       async recover() {
         throw new Error("not reached");

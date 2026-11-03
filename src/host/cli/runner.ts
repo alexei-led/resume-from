@@ -27,7 +27,6 @@ import {
   renderNative,
   renderPreview,
   renderRecovery,
-  renderSummary,
   renderWarnings,
 } from "./render.js";
 
@@ -171,7 +170,11 @@ async function restoreFlow(
     }
     try {
       const turns = await pipeline.context(descriptor, target);
-      return { stdout: renderContext(descriptor, place, turns), stderr: [], exitCode: 0 };
+      return {
+        stdout: renderContext(pipeline.summary(descriptor, place), place, turns),
+        stderr: [],
+        exitCode: 0,
+      };
     } catch (error) {
       return failure(`The conversation could not be read: ${messageOf(error)}`);
     }
@@ -182,7 +185,7 @@ async function restoreFlow(
   if (place.state === "unrecoverable" && request.to === null) {
     return {
       stdout: [
-        ...renderSummary(descriptor, place),
+        ...pipeline.summary(descriptor, place),
         ...renderWarnings(place.warnings),
         ...(place.reason === null ? [] : [`⚠ ${safeText(place.reason)}`]),
       ],
@@ -200,7 +203,7 @@ async function restoreFlow(
     if (request.confirmationToken === null) {
       return {
         stdout: renderRecovery(
-          descriptor,
+          pipeline.summary(descriptor, place),
           place,
           renderCommand(invocation, [...withoutConfirmation(invocation.argv), CONFIRM_FLAG, token]),
         ),
@@ -238,7 +241,11 @@ async function restoreFlow(
   if (native) {
     try {
       const command = pipeline.resumeCommand(descriptor, place.directory, request.prompt);
-      return { stdout: renderNative(descriptor, place, command), stderr: [], exitCode: 0 };
+      return {
+        stdout: renderNative(pipeline.summary(descriptor, place), place, command),
+        stderr: [],
+        exitCode: 0,
+      };
     } catch (error) {
       return failure(`The resume command could not be rendered: ${messageOf(error)}`);
     }

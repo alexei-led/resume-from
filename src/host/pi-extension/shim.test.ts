@@ -69,7 +69,20 @@ describe("Pi package shim provenance", () => {
       { expanded: false },
       { fg: (_name, text) => text },
     );
-    expect(component?.render(80)).toEqual(["Imported from pi · Dropped: 57"]);
+    expect(component?.render(80)).toEqual(["Imported from pi"]);
+
+    const paints: string[] = [];
+    renderer?.(
+      { data: { lines: ["Imported from pi", "Source session: source-1", "Dropped: 57"] } },
+      { expanded: false },
+      {
+        fg: (name, text) => {
+          paints.push(name);
+          return text;
+        },
+      },
+    )?.render(80);
+    expect(paints).toEqual(["dim"]);
 
     const expanded = renderer?.(
       { data: { lines: ["Imported from pi", "Source session: source-1", "Dropped: 57"] } },

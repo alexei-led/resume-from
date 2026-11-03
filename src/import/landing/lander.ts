@@ -19,7 +19,7 @@ import type {
   ValidationDefect,
 } from "./contract.js";
 import { LandingFailure } from "./errors.js";
-import { buildMarker } from "./marker.js";
+import { buildMarker } from "./summary.js";
 
 /** The one landing level that moves the user in (FR-43, FR-44). */
 const SWITCH_LEVEL = "create-and-switch";
@@ -95,7 +95,7 @@ async function runLanding(
   }
 
   const capabilities = adapter.capabilities();
-  const marker = buildMarker(plan, importedAt);
+  const marker = buildMarker(plan, importedAt, context.cwd);
   const session: CanonicalSession = {
     provenance: plan.provenance,
     turns: plan.turns,

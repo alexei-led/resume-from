@@ -187,6 +187,12 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
       calls.order.push("place");
       return place;
     },
+    summary(targetSession, targetPlace) {
+      return [
+        `↻ ${targetSession.ref.agent} ${targetSession.ref.id.slice(0, 8)} · ${targetSession.ref.home} · ${targetSession.updatedAt} · ${targetSession.title}`,
+        `  ${targetPlace.directory === "" ? "(no recorded directory)" : targetPlace.directory} · ${targetPlace.branch ?? "no branch"}`,
+      ];
+    },
     recoveryToken() {
       return null;
     },

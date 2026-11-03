@@ -646,6 +646,8 @@ interface ImportPipeline {
   locate(request: LocateRequest): Promise<SessionDescriptor>;
   /** Where the session's recorded directory is, and how it could be recreated (FR-61). */
   place(descriptor: SessionDescriptor): Promise<Place>;
+  /** The two summary lines every restore output starts with (FR-61). */
+  summary(descriptor: SessionDescriptor, place: Place): string[];
   /** Binds the session file, directory and recovery argv into a token (FR-61). */
   recoveryToken(descriptor: SessionDescriptor, place: Place): string | null;
   /** Runs the recovery only when the token matches. A mismatch runs nothing (FR-61). */

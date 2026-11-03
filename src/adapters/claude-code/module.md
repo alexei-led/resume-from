@@ -12,8 +12,9 @@ shows and its own resume command opens as native turns.
 
 C-3 makes this the most dangerous target in the system: the session store is an internal application
 database with ten entry types, and a bad write can damage the real sessions of the user. C-9 makes it
-tractable: a new file with two entry types — one `user`, one `assistant` — was listed and resumed
-correctly. This module writes exactly that, and only into paths that do not exist.
+tractable: a new file whose turns are `user` and `assistant` entries was listed and resumed
+correctly. This module writes those two turn types plus one `system` marker entry, and it writes
+only into paths that do not exist.
 
 ## Functional Responsibilities
 
@@ -44,8 +45,9 @@ treats every guarantee as conditional on the add-only commit path and on reading
 
 - **Which entry types are enough.** That `user` and `assistant` entries produce a session the native
   resume list shows with time, branch and size, and that `claude --resume <id>` puts the turns on the
-  screen (C-9). Eight of the ten entry types of C-3 were not necessary, and this module does not
-  write them.
+  screen (C-9). A single `system` entry with subtype `informational` and level `info` renders gray
+  and is excluded from model context; that is the marker shape (FR-47, FR-48). The other entry
+  types of C-3 were not necessary, and this module does not write them.
 - **The danger of the store.** That the store is an internal application database with ten entry
   types and a bad write can damage real sessions (C-3), and that C-9's throwaway-directory test does
   not lift that risk.
@@ -53,7 +55,9 @@ treats every guarantee as conditional on the add-only commit path and on reading
   home such as `~/.claude-team` is recognised (FR-2, FR-4).
 - **How a session is keyed to a repository**, so that FR-13's filter can work and so a session written
   for one repository never appears under another.
-- **How Claude Code shows a marker the model does not read** (FR-47, FR-48).
+- **How Claude Code shows a marker the model does not read.** A `system`/`informational`/`info`
+  entry is shown gray and excluded from model context; a `user` entry flagged `isMeta` is neither
+  shown on resume nor excluded from the model (FR-47, FR-48).
 
 ## Public Contract
 
@@ -408,7 +412,7 @@ it belongs to `src/host/cli/`.
 Changes that require **only this module** to change:
 
 - Claude Code changes its session file layout or the fields the resume list reads.
-- The two entry types of C-9 stop being enough and a third becomes necessary.
+- The turn entry types of C-9, or the system marker shape, stop working.
 - Claude Code gains an API that can move the user, changing the declared landing level.
 - The per-project layout inside a home changes.
 - The default home moves, or the assumed context window changes.
@@ -459,9 +463,10 @@ None of these touch a rule, a preview, another adapter, or the host.
   token or API key typed by the user as a chat message must not reach a different model vendor. The
   reader applies `redactSensitiveText` to every non-empty turn text in the `push` helper, so no
   turn in the loaded session can carry a recognizable credential in its `text` field.
-- **The provenance marker is written as an entry Claude Code shows but does not send to the model**
-  (FR-47, FR-48). If the installed version has no such entry, this module declares
-  `provenance: "host-output-only"` rather than putting the marker into the model context.
+- **The provenance marker is one `system` entry with subtype `informational`, level `info` and
+  `isMeta: false`** (FR-47, FR-48). Claude Code shows it gray and its API filter excludes it. If a
+  future version stops doing so, this module declares `provenance: "host-output-only"` rather than
+  putting the marker into the model context.
 - **Facts about Claude Code are verified against the installed version, never assumed.** The default
   home, the per-project layout, the session file naming and the entry field names are confirmed by
   the boundary tests of this module against Claude Code 2.1.220 or later. C-3 and C-9 are the only
@@ -502,10 +507,11 @@ between runs, T-CC-17 checks T-CC-11's discipline against it as well.
 - Expected behavior: `outcomeLine` is `Read('src/auth.ts') → 400 lines`, `bodyDropped` is true, and
   no line of the file survives (FR-23, FR-24, FR-25).
 
-**T-CC-4 — serialization writes two entry types and no more**
+**T-CC-4 — serialization writes the marker and the turn types, and no more**
 - Scenario: the reference session is serialized.
-- Expected behavior: every entry is a `user` entry or an `assistant` entry. None of the other eight
-  entry types of C-3 is written — fewer types, fewer ways to corrupt the store.
+- Expected behavior: the first entry is the `system` marker; every other entry is a `user` or an
+  `assistant` entry. None of the other entry types of C-3 is written — fewer types, fewer ways to
+  corrupt the store.
 
 **T-CC-5 — the session is keyed to the right repository**
 - Scenario: the reference session is serialized for a target home, for a repository at a known path.

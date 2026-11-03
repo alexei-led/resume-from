@@ -382,17 +382,18 @@ describe("unit", () => {
     expect(marker.droppedSummary).toContain("12");
     expect(marker.droppedSummary).not.toContain("\n");
 
-    const rendered = marker.lines.join("\n");
-    expect(marker.lines.length).toBeGreaterThanOrEqual(5);
-    for (const fact of [
-      marker.sourceAgent,
-      marker.sourceHome,
-      marker.sourceSessionId,
-      marker.importedAt,
-      marker.droppedSummary,
-    ]) {
-      expect(rendered).toContain(fact);
-    }
+    // The three-line summary: where it came from, where it now lives, what was dropped (FR-61).
+    expect(marker.lines).toHaveLength(3);
+    const [origin, location, dropped] = marker.lines;
+    expect(origin).toContain(
+      `Restored from ${marker.sourceAgent} ${marker.sourceSessionId.slice(0, 8)}`,
+    );
+    expect(origin).toContain(marker.sourceHome);
+    expect(origin).toContain("2026-02-03 10:11Z");
+    expect(location).toContain("/repo");
+    expect(location).toContain("master");
+    expect(dropped).toContain("3 turns kept");
+    expect(dropped).toContain(marker.droppedSummary);
     // The marker reaches the adapter; the adapter decides where it goes (FR-48).
     expect(adapter.serializeArgs?.marker).toEqual(marker);
   });

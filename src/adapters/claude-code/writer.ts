@@ -27,6 +27,7 @@ import {
   asObject,
   asString,
   ENTRY_TYPE_ASSISTANT,
+  ENTRY_TYPE_SYSTEM,
   ENTRY_TYPE_USER,
   parseJsonl,
   toIsoUtc,
@@ -36,8 +37,11 @@ import { projectDir, SESSION_FILE_SUFFIX, sessionFilePath } from "./layout.js";
 
 /** The version C-9 was measured against. Written so the target reads a version it knows. */
 export const CLAUDE_CODE_FORMAT_VERSION = "2.1.220";
-/** The model field of an imported turn. No model produced it, and none is claimed. */
-export const IMPORTED_MODEL = "imported";
+/**
+ * The model field of an imported turn. No model produced it, and none is claimed.
+ * "<synthetic>" is the value Claude Code resumes without a "model could not be restored" notice.
+ */
+export const IMPORTED_MODEL = "<synthetic>";
 export const USER_TYPE = "external";
 const EMPTY_TURN_TEXT = "(empty message)";
 const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
@@ -117,17 +121,19 @@ function envelope(ctx: EntryContext, index: number, parentUuid: string | null, t
 /**
  * The provenance marker (FR-47, FR-48).
  *
- * It rides in a `user` entry flagged `isMeta`, the flag Claude Code puts on entries it shows in
- * the transcript but does not send as a turn. C-9 proved the entry type; it did not prove the
- * flag. T-CC-17 is what can falsify it — if the marker ever reaches the model, this module
- * declares `provenance: "host-output-only"` instead and the marker moves to host output.
+ * It rides in one `system` entry with subtype `informational` and level `info`. Claude Code
+ * renders it entirely gray, and its API filter excludes every `system` entry except
+ * `local_command`, so it never reaches the model. A `user` entry flagged `isMeta` was the
+ * earlier shape: it was not shown on resume and was not excluded from model context.
  */
-function outOfContextMarkerEntry(ctx: EntryContext, marker: ProvenanceMarker) {
+function markerEntry(ctx: EntryContext, marker: ProvenanceMarker) {
   return {
     ...envelope(ctx, 0, null, toIsoUtc(marker.importedAt) ?? new Date(0).toISOString()),
-    type: ENTRY_TYPE_USER,
-    isMeta: true,
-    message: { role: "user", content: marker.lines.join("\n") },
+    type: ENTRY_TYPE_SYSTEM,
+    subtype: "informational",
+    level: "info",
+    isMeta: false,
+    content: marker.lines.join("\n"),
   };
 }
 
@@ -152,7 +158,7 @@ function buildEntries(
     toIsoUtc(marker.importedAt) ??
     toIsoUtc(session.provenance.updatedAt) ??
     new Date(0).toISOString();
-  const entries: Record<string, unknown>[] = [outOfContextMarkerEntry(ctx, marker)];
+  const entries: Record<string, unknown>[] = [markerEntry(ctx, marker)];
 
   for (const turn of session.turns) {
     const index = entries.length;
@@ -270,6 +276,25 @@ function checkEntry(
       path: `${at}/parentUuid`,
       message: "parentUuid does not point at the entry before it; the transcript would break",
     });
+  }
+
+  // The marker entry carries visible content and no message (FR-47, FR-48). Its subtype,
+  // level and isMeta are what make Claude Code show it gray and keep it out of model context.
+  if (type === ENTRY_TYPE_SYSTEM) {
+    if (asString(entry.content) === null) {
+      defects.push({
+        path: `${at}/content`,
+        message: "system marker entry has no content; Claude Code would show nothing",
+      });
+    }
+    if (entry.subtype !== "informational" || entry.level !== "info" || entry.isMeta !== false) {
+      defects.push({
+        path: `${at}`,
+        message:
+          "system marker entry is not informational/info with isMeta false; Claude Code may show it as a turn or send it to the model",
+      });
+    }
+    return;
   }
 
   const message = asObject(entry.message);

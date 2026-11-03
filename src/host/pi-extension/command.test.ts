@@ -177,6 +177,12 @@ function stubPipeline(
         stub.order.push("place");
         return opts.place ?? present();
       },
+      summary(descriptor, targetPlace) {
+        return [
+          `↻ ${descriptor.ref.agent} ${descriptor.ref.id.slice(0, 8)} · ${descriptor.ref.home} · ${descriptor.updatedAt} · ${descriptor.title}`,
+          `  ${targetPlace.directory === "" ? "(no recorded directory)" : targetPlace.directory} · ${targetPlace.branch ?? "no branch"}`,
+        ];
+      },
       recoveryToken() {
         return opts.recoveryToken ?? null;
       },

@@ -40,6 +40,7 @@ import type {
 } from "./contract.js";
 import { canonicalPath, isDirectory } from "./discovery/index.js";
 import { ImportFailure, reasonOf } from "./errors.js";
+import { summaryLines } from "./landing/index.js";
 
 /** The role a target adapter must declare to receive an import (FR-59). */
 const TARGET_ROLE = "target";
@@ -373,6 +374,8 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
       stages.checkCancellation();
       return place;
     },
+
+    summary: summaryLines,
 
     recoveryToken(descriptor: SessionDescriptor, place: Place): string | null {
       return recoveryPlanToken(descriptor, place);

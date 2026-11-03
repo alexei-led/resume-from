@@ -223,11 +223,9 @@ const REFERENCE_MARKER: ProvenanceMarker = {
   importedAt: "2026-08-01T09:20:00Z",
   droppedSummary: "Dropped on import: 3 tool result bodies.",
   lines: [
-    `Imported from ${REFERENCE_REF.agent}`,
-    `Source home: ${REFERENCE_REF.home}`,
-    `Source session: ${REFERENCE_REF.id}`,
-    `Imported at: 2026-08-01T09:20:00Z`,
-    "Dropped on import: 3 tool result bodies.",
+    `↻ Restored from ${REFERENCE_REF.agent} ${REFERENCE_REF.id.slice(0, 8)} (${REFERENCE_REF.home}) · 2026-08-01 09:20Z`,
+    "  /home/testuser/work/app · master",
+    "12 turns kept · Dropped on import: 3 tool result bodies.",
   ],
 };
 
@@ -373,14 +371,14 @@ describe("boundary shapes", () => {
       expect(hasCountedNoun || hasTrailingToolCall).toBe(true);
     }
 
-    // FR-47: lines carry the four provenance facts in the order buildMarker() declares,
-    // with the droppedSummary as the fifth element.
-    expect(REFERENCE_MARKER.lines).toHaveLength(5);
-    expect(REFERENCE_MARKER.lines[0] ?? "").toMatch(/^Imported from /);
-    expect(REFERENCE_MARKER.lines[1] ?? "").toMatch(/^Source home: /);
-    expect(REFERENCE_MARKER.lines[2] ?? "").toMatch(/^Source session: /);
-    expect(REFERENCE_MARKER.lines[3] ?? "").toMatch(/^Imported at: /);
-    expect(REFERENCE_MARKER.lines[4]).toBe(REFERENCE_MARKER.droppedSummary);
+    // FR-47: the marker is a three-line summary — origin, location, and what was dropped.
+    expect(REFERENCE_MARKER.lines).toHaveLength(3);
+    expect(REFERENCE_MARKER.lines[0] ?? "").toMatch(/^↻ Restored from /);
+    expect(REFERENCE_MARKER.lines[0]).toContain(REFERENCE_MARKER.sourceAgent);
+    expect(REFERENCE_MARKER.lines[0]).toContain(REFERENCE_MARKER.sourceHome);
+    expect(REFERENCE_MARKER.lines[0]).toContain(REFERENCE_MARKER.sourceSessionId.slice(0, 8));
+    expect(REFERENCE_MARKER.lines[1]?.startsWith("  ")).toBe(true);
+    expect(REFERENCE_MARKER.lines[2]).toContain(REFERENCE_MARKER.droppedSummary);
   });
 });
 

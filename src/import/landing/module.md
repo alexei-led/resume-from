@@ -18,8 +18,8 @@ including agents that do not exist yet.
 
 ## Functional Responsibilities
 
-- Build the provenance marker from the plan: source agent, source home, source session ID, the time
-  of the import, and what was dropped (FR-47).
+- Build the three-line provenance summary from the plan: where the session came from, where it now
+  lives, and how many turns were kept and what was dropped (FR-47, FR-61).
 - Ask the target adapter to serialize the plan into its own format (FR-40, FR-41).
 - Validate the serialized session before it reaches the target home (FR-50).
 - Commit the adapter's exactly-one file output, add-only and atomically published (FR-49, FR-53).
@@ -47,7 +47,8 @@ port. This module holds the order and the guarantees, not the formats.
   in that order, with created-path reporting attached to every failure after commit.
 - **Post-commit preservation.** A failed reconciliation keeps and reports the published paths because
   pathname rollback could delete a concurrent replacement.
-- **The provenance marker composition.** Which facts go into it and in what order (FR-47).
+- **The provenance marker composition.** The three-line summary shares its `~` shortening and time
+  format with the native restore header, so the two cannot drift (FR-47, FR-61).
 - **The handover command.** That when an adapter cannot switch, the user is told the session ID and
   the exact command (FR-45).
 - **That the target must stay idle** after landing (FR-46). Nothing here sends a message or triggers
@@ -488,6 +489,16 @@ interface SessionLander {
 - **Shared knowledge**: the restated `Bytes`, `PendingFile`, `CommitRefusal`, `CommitHandle`,
   `CommitError` and `FileCommitter` blocks in the Public Contract section above. This is the only
   module in the tree that calls a committer.
+
+---
+
+- **Counterpart**: `src/platform/repo/`
+- **Direction**: `src/import/landing/` depends on `src/platform/repo/`
+- **Strength**: contract — the summary builder reads a `Place`
+- **LCA / Rank / Distance**: LCA `src/`, rank 2, distance 2
+- **Volatility**: low
+- **Balanced?**: yes
+- **Shared knowledge**: the `Place` block restated in `src/platform/repo/module.md`.
 
 ## Change Vectors
 

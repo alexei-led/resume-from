@@ -181,6 +181,9 @@ describe("the target profile", () => {
       commit: () => Promise.reject(new Error("not called")),
       locate: () => Promise.reject(new Error("not called")),
       place: () => Promise.reject(new Error("not called")),
+      summary: () => {
+        throw new Error("not called");
+      },
       recoveryToken: () => null,
       recover: () => Promise.reject(new Error("not called")),
       destinationFor: () => Promise.reject(new Error("not called")),

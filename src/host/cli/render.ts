@@ -1,58 +1,10 @@
 // The text layout of the numbered list and of the landing outcome.
 // Nothing here decides anything: it prints what the pipeline returned.
 
-import { homedir } from "node:os";
-import { join, relative } from "node:path";
 import type { LandingResult, Listing, Place, SessionDescriptor } from "./contract.js";
 import { safeText } from "./presentation.js";
 
 const COLUMN_GAP = "  ";
-const MAX_TITLE = 60;
-
-/** `~` when the path is under the home, the absolute path otherwise. */
-export function shortenPath(value: string, home: string = homedir()): string {
-  const within = relative(home, value);
-  if (within === "" || (!within.startsWith("..") && !within.startsWith("/"))) {
-    return within === "" ? "~" : `~${join("/", within).replaceAll("\\", "/")}`;
-  }
-  return value;
-}
-
-/** One line of untrusted text, shortened to the room a summary line has. */
-function summaryText(value: string): string {
-  const line = safeText(value).replace(/\s+/gu, " ").trim();
-  return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1)}…` : line;
-}
-
-/** A recorded directory, or a short phrase when the session records none. */
-function directoryText(value: string, home: string): string {
-  return value === "" ? "(no recorded directory)" : shortenPath(value, home);
-}
-
-/** The two summary lines every restore output starts with (FR-61). */
-export function renderSummary(
-  descriptor: SessionDescriptor,
-  place: Place,
-  home: string = homedir(),
-): string[] {
-  const title = summaryText(descriptor.title) || "(untitled)";
-  const first =
-    `↻ ${safeText(descriptor.ref.agent)} ${safeText(descriptor.ref.id).slice(0, 8)} · ` +
-    `${safeText(shortenPath(descriptor.ref.home, home))} · ` +
-    `${formatTime(descriptor.updatedAt)} · ${title}`;
-  const state =
-    place.state === "present"
-      ? null
-      : place.state === "recoverable"
-        ? "directory missing; it can be recreated"
-        : "directory missing and cannot be recovered";
-  const second = [
-    directoryText(place.directory, home),
-    place.branch ?? "no branch",
-    ...(state === null ? [] : [state]),
-  ].join(" · ");
-  return [first, `  ${second}`];
-}
 
 /** Every warning as its own `⚠` line. */
 export function renderWarnings(warnings: readonly string[]): string[] {
@@ -60,29 +12,15 @@ export function renderWarnings(warnings: readonly string[]): string[] {
 }
 
 /** The native mode output: summary, warnings, and the command that resumes the session. */
-export function renderNative(
-  descriptor: SessionDescriptor,
-  place: Place,
-  command: string,
-  home: string = homedir(),
-): string[] {
-  return [
-    ...renderSummary(descriptor, place, home),
-    ...renderWarnings(place.warnings),
-    `Resume: ${command}`,
-  ];
+export function renderNative(summary: string[], place: Place, command: string): string[] {
+  return [...summary.map(safeText), ...renderWarnings(place.warnings), `Resume: ${command}`];
 }
 
 /** The output before a recovery runs: summary, warnings, each command, and the re-run token. */
-export function renderRecovery(
-  descriptor: SessionDescriptor,
-  place: Place,
-  confirmCommand: string,
-  home: string = homedir(),
-): string[] {
+export function renderRecovery(summary: string[], place: Place, confirmCommand: string): string[] {
   const commands = place.recovery?.commands ?? [];
   return [
-    ...renderSummary(descriptor, place, home),
+    ...summary.map(safeText),
     ...renderWarnings(place.warnings),
     ...commands.map((command) => `Recover: ${command.display}`),
     `Confirm: ${confirmCommand}`,
@@ -90,17 +28,12 @@ export function renderRecovery(
 }
 
 /** `--context`: the summary, the conversation an import would keep, and the directory. */
-export function renderContext(
-  descriptor: SessionDescriptor,
-  place: Place,
-  turns: readonly string[],
-  home: string = homedir(),
-): string[] {
+export function renderContext(summary: string[], place: Place, turns: readonly string[]): string[] {
   return [
-    ...renderSummary(descriptor, place, home),
+    ...summary.map(safeText),
     ...renderWarnings(place.warnings),
     ...turns.map(safeText),
-    `Directory: ${directoryText(place.directory, home)}`,
+    `Directory: ${safeText(place.directory === "" ? "(no recorded directory)" : place.directory)}`,
   ];
 }
 

@@ -23,7 +23,7 @@ function renderProvenance(entry, { expanded }, theme) {
       ? ["Imported session"]
       : expanded
         ? lines
-        : [`${lines[0] ?? "Imported session"} · ${lines.at(-1) ?? ""}`];
+        : [lines[0] ?? "Imported session"];
   return {
     render(width) {
       return visible.map((line) =>

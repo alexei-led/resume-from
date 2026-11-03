@@ -102,7 +102,7 @@ async function restore(
 
   if (place.state === "unrecoverable") {
     deps.ui.show([
-      ...summaryLines(descriptor, place),
+      ...summaryLines(pipeline, descriptor, place),
       `The directory cannot be recovered: ${place.reason ?? "no repository was found"}`,
     ]);
     return;
@@ -114,7 +114,7 @@ async function restore(
       deps.ui.show(["The recovery plan could not be bound to a confirmation token."]);
       return;
     }
-    deps.ui.show([...summaryLines(descriptor, place), ...recoveryLines(place)]);
+    deps.ui.show([...summaryLines(pipeline, descriptor, place), ...recoveryLines(place)]);
     if ((await deps.ui.confirm(CONFIRM_QUESTION.replace("Import", "Recreate"))) !== "selected") {
       deps.ui.show([CANCELLED_LINE]);
       return;
@@ -232,13 +232,14 @@ async function importSelection(
   if (landing !== null && !landing.switched) present(deps.ui, landing);
 }
 
-/** Summary lines for the restore output Pi shows above a command or a question (FR-61). */
-function summaryLines(descriptor: SessionDescriptor, place: Place): string[] {
-  const directory = place.directory === "" ? "(no recorded directory)" : place.directory;
-  const branch = place.branch ?? "no branch";
+/** The restore summary and its warnings, above a command or a question (FR-61). */
+function summaryLines(
+  pipeline: ImportPipeline,
+  descriptor: SessionDescriptor,
+  place: Place,
+): string[] {
   return [
-    `↻ ${safeText(descriptor.ref.agent)} ${safeText(descriptor.ref.id).slice(0, 8)} · ${safeText(descriptor.ref.home)}`,
-    `  ${safeText(directory)} · ${safeText(branch)}`,
+    ...pipeline.summary(descriptor, place).map(safeText),
     ...place.warnings.map((warning) => `⚠ ${safeText(warning)}`),
   ];
 }
@@ -254,7 +255,7 @@ function showResume(
   place: Place,
 ): void {
   ui.show([
-    ...summaryLines(descriptor, place),
+    ...summaryLines(pipeline, descriptor, place),
     `Resume: ${pipeline.resumeCommand(descriptor, place.directory, null)}`,
   ]);
 }
