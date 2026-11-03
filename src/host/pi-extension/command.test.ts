@@ -144,6 +144,7 @@ function stubPipeline(
     placeAfterRecovery?: Place;
     context?: string[];
     switchOutcome?: SwitchOutcome;
+    switchError?: Error;
     onCommit?: (request: ImportRequest, runtime: AgentRuntime, confirmationToken: string) => void;
   } = {},
 ): PipelineStub {
@@ -211,6 +212,9 @@ function stubPipeline(
           }
         );
       },
+      inPlaceCommand() {
+        return null;
+      },
       resumeCommand(_descriptor, directory, prompt) {
         const suffix = prompt === null || prompt === "" ? "" : ` ${prompt}`;
         return `cd ${directory} && pi --session /Users/me/.pi/sessions/s-1.json${suffix}`;
@@ -220,6 +224,7 @@ function stubPipeline(
       },
       async switchTo(descriptor) {
         stub.switchCalls.push(descriptor);
+        if (opts.switchError !== undefined) throw opts.switchError;
         return opts.switchOutcome ?? { switched: true, cancelled: false };
       },
     },
@@ -436,7 +441,7 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
     expect(ui.asked).toHaveLength(0);
   });
 
-  it("shows the Resume command for a Pi session in another directory", async () => {
+  it("switches in-process to a Pi session in another directory", async () => {
     const located = descriptor({
       ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
       filePath: "/Users/me/.pi/sessions/--other--/100_pi-1.jsonl",
@@ -453,8 +458,53 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
       deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
     ).run(ctx, ["pi-1"], pipeline);
 
-    expect(switchCalls).toEqual([]);
-    expect(ui.blocks.flat().join("\n")).toContain("Resume:");
+    expect(switchCalls).toEqual([located]);
+    expect(ui.blocks.flat().join("\n")).not.toContain("Resume:");
+  });
+
+  it("shows the Resume command when the switch is declined", async () => {
+    const located = descriptor({
+      ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+      filePath: "/Users/me/.pi/sessions/--other--/100_pi-1.jsonl",
+      startDirectory: "/other",
+    });
+    const { pipeline, switchCalls } = stubPipeline({
+      located,
+      place: present({ directory: "/other" }),
+      switchOutcome: { switched: false, cancelled: true },
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(switchCalls).toEqual([located]);
+    expect(ui.blocks.flat().join("\n")).toContain("Resume: cd /other && pi --session");
+  });
+
+  it("shows the failure and the Resume command when the switch fails", async () => {
+    const located = descriptor({
+      ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+      filePath: "/Users/me/.pi/sessions/--other--/100_pi-1.jsonl",
+      startDirectory: "/other",
+    });
+    const { pipeline } = stubPipeline({
+      located,
+      place: present({ directory: "/other" }),
+      switchError: new Error("Pi refused the switch"),
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    const text = ui.blocks.flat().join("\n");
+    expect(text).toContain("Pi refused the switch");
+    expect(text).toContain("Resume: cd /other && pi --session");
   });
 
   it("sanitises the Resume command a session directory supplied", async () => {
@@ -467,6 +517,7 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
     const { pipeline } = stubPipeline({
       located,
       place: present({ directory: injected }),
+      switchOutcome: { switched: false, cancelled: true },
     });
     const ui = stubUi();
     const { ctx } = stubContext({ cwd: "/repo" });
@@ -480,7 +531,7 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
     expect(text).not.toContain("\u001b");
   });
 
-  it("does not switch an import whose destination is another directory", async () => {
+  it("switches an import whose destination is another directory", async () => {
     const { pipeline, commitCalls } = stubPipeline({
       destination: { directory: "/elsewhere", warning: null },
     });
@@ -492,7 +543,7 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
     ).run(ctx, ["cx-1"], pipeline);
 
     expect(commitCalls[0]?.request.destinationCwd).toBe("/elsewhere");
-    expect(commitCalls[0]?.runtime).toBeNull();
+    expect(commitCalls[0]?.runtime).toBe(ctx);
   });
 });
 

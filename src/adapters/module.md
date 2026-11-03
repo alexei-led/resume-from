@@ -337,6 +337,12 @@ interface AgentAdapter {
     prompt: string | null;
   }): string;
 
+  /**
+   * The command the user types inside the running agent to open one of its own sessions there,
+   * from any directory. Null when the agent has none, or when switchTo moves the user itself.
+   */
+  inPlaceCommand(sessionId: SessionId): string | null;
+
   /** Target role. Produces bytes only. It never creates a file (FR-49, FR-53). */
   serialize(
     session: CanonicalSession,

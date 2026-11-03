@@ -65,9 +65,10 @@ What the command does depends on the situation:
 | Situation | Result |
 | --- | --- |
 | Bare shell (no `--target-agent`) | Prints the session's own resume command. Never imports. |
-| CLI plugin, same agent and profile home, no `--to` | Same as bare shell: native resume, nothing written. |
-| CLI plugin, different agent or profile home, or `--to <dir>` | Import preview, then a new native session after confirmation. |
-| Pi, native, session directory is Pi's cwd | Switches Pi to the original session in process. |
+| Claude Code or Codex, same agent and profile home, no `--to` | Nothing written. Prints `Resume in place: /resume <id>` to type in the running agent, plus the shell command. |
+| Claude Code or Codex, different agent or profile home, or `--to <dir>` | Import preview. After confirmation, prints `Resume in place: /resume <new-id>`, plus the shell command. |
+| Pi, native session | Switches Pi to the original session in process, from any directory. |
+| Pi, import | Import preview. After confirmation, switches Pi into the new session. |
 | Missing directory | Shows `Recover:` commands; runs them only with the printed `Confirm:` token. |
 
 ## What crosses the boundary
@@ -133,10 +134,13 @@ The tool prints a short summary:
 ```text
 ↻ claude-code dc601a22 · ~/.claude · 2026-11-03 10:04Z · fix the parser crash
   ~/.local/share/chezmoi · master
+Resume in place: /resume dc601a22-64e3-410b-9321-bb8f86bdc5ad
 Resume: cd /Users/alexei/.local/share/chezmoi && claude --resume dc601a22-64e3-410b-9321-bb8f86bdc5ad
 ```
 
-Same agent: run that `Resume:` line. Different agent: the tool shows an import preview and the exact
+Same agent: type the `Resume in place:` command in the running agent. It keeps that agent's launch
+settings and moves it to the session's directory. The `Resume:` line opens the session from another
+terminal; a bare shell prints only that line. Different agent: the tool shows an import preview and the exact
 `Confirm:` command to re-run. A missing recorded directory is shown first as one or more `Recover:`
 git commands, also gated by `Confirm:`. Pi uses its own interactive `Import this session? (y/N)`
 confirmation instead of a `Confirm:` line.

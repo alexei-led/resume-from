@@ -187,6 +187,7 @@ describe("the target profile", () => {
       recoveryToken: () => null,
       recover: () => Promise.reject(new Error("not called")),
       destinationFor: () => Promise.reject(new Error("not called")),
+      inPlaceCommand: () => null,
       resumeCommand: () => {
         throw new Error("not called");
       },

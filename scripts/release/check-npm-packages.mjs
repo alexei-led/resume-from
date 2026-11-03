@@ -263,11 +263,10 @@ for (const [contents, source] of [
     "--to <dir>",
     "shell-quoted argv item after `--`",
     "`Confirm:`",
+    "`Resume in place:`",
     "`Resume:`",
     "`Switched.`",
-    "agtermctl session new",
-    "tmux new-window",
-    "`--context`",
+    "Do not start a new terminal",
     '--prompt "<instructions>"',
     "verbatim",
     "Never delete anything, never force git, never edit a session file",
@@ -275,6 +274,7 @@ for (const [contents, source] of [
   ]) {
     if (!contents.includes(required)) throw new Error(`${source} is missing instruction: ${required}`);
   }
+  if (contents.includes("agtermctl")) throw new Error(`${source} still launches an agterm session.`);
 }
 
 // Claude bundles the runtime; Codex deliberately uses the version-pinned core package above.

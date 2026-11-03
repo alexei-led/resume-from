@@ -87,9 +87,11 @@ back.
 
 ## Continue in place from instructions
 
+In Claude Code and Codex, `/resume <id>` replaces the current conversation, so instructions given to
+`/resume-from` cannot cross it. The command shows them again: send them after you resume in place.
+
 `--context` is read-only. It prints the summary and the conversation an import into the current agent
-would keep, then `Directory: <dir>`. The skill uses it when it cannot open a new terminal: it changes
-to that directory and carries out your instructions in the current session.
+would keep, then `Directory: <dir>`.
 
 ## Start a fresh context without losing the task
 
@@ -110,5 +112,6 @@ If pinned content alone does not fit, it blocks before writing.
 - Credentials, model selection, hidden reasoning, system prompts, environment data, telemetry, and
   vendor runtime state do not transfer.
 - Tool-result bodies do not transfer.
-- Pi can switch in process. Claude Code and Codex require the printed native resume command.
+- Pi switches in process. Claude Code and Codex cannot be switched by a plugin: type the printed
+  `Resume in place:` command (`/resume <id>`) in the running agent.
 - The Codex plugin's first run needs npm access unless its pinned package is already cached.

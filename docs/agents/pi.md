@@ -22,9 +22,9 @@ Restart Pi after the install. The package registers `/resume-from`.
 The lookup is global. An exact ID wins; a prefix of at least six characters selects the session when
 exactly one matches; several matches are listed as candidates. A session file path is also accepted.
 
-A Pi session whose directory is Pi's current directory is switched to in process, using the original
-file: no copy, no confirmation. A session from another directory, or another agent, prints `Resume:`.
-A Pi import shows the preview and then asks `Import this session? (y/N)` before writing anything.
+A Pi session is switched to in process, using the original file: no copy, no confirmation. This works
+from any directory: Pi moves to the session's directory. If the switch is declined or fails, Pi
+prints `Resume:`. A session from another agent or profile is imported. A Pi import shows the preview and then asks `Import this session? (y/N)` before writing anything.
 
 ## Import with the picker
 
@@ -33,8 +33,8 @@ A Pi import shows the preview and then asks `Import this session? (y/N)` before 
 3. Read the preview.
 4. Confirm the import.
 
-Pi writes the new session and opens it when the destination is its cwd. Otherwise it prints the
-native resume command. The next prompt is empty, so you decide when work starts.
+Pi writes the new session and opens it in process, in the session's directory. If the switch is
+declined or fails, it prints the native resume command. The next prompt is empty, so you decide when work starts.
 
 ## Marker
 

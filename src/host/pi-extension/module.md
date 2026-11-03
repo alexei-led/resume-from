@@ -19,9 +19,10 @@ switch of C-10 needs a live command context, and a command binary in another pro
 - Register the `/resume-from` command with Pi.
 - Open an interactive picker over the listing: move with the arrow keys, select with Enter (FR-9).
 - Accept an ID, ID prefix or a file path as an argument, skipping the picker (FR-12, FR-61).
-- Restore a named session: switch in place, to its original file, when it is a Pi session in this
-  directory; otherwise show its `Resume:` command. An import or a recovery is confirmed through the
-  dialog, and an import switches only when it lands in Pi's own directory (FR-61).
+- Restore a named session: switch in place to its original file when it is a Pi session, from any
+  directory; Pi rebuilds its runtime for the session's directory. An import or a recovery is
+  confirmed through the dialog, and an import then switches into the new session. A declined or
+  failed switch shows the `Resume:` command (FR-44, FR-61).
 - Show the preview as `PreviewReport.lines` gives it, and take the user's confirmation (FR-16,
   FR-20, FR-21).
 - Commit through the pipeline, passing Pi's command context as the runtime handle so the Pi adapter

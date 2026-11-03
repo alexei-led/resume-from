@@ -399,6 +399,10 @@ export function createStubAdapter(options: StubAdapterOptions): AgentAdapter {
       return descriptorFor(parsed, options.agent, path.dirname(path.dirname(filePath)), filePath);
     },
 
+    inPlaceCommand(_sessionId: string): string | null {
+      return null;
+    },
+
     resumeCommand(input): string {
       const prompt = input.prompt === null ? "" : ` ${input.prompt}`;
       return `cd ${input.directory} && ${options.agent} resume ${input.sessionId}${prompt}`;

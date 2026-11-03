@@ -33,6 +33,7 @@ import type {
   SessionFinder,
   SessionLander,
   SessionLocator,
+  SessionRef,
   TargetProfile,
   TokenEstimator,
   TransferPlan,
@@ -495,6 +496,13 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
         filePath: descriptor.filePath,
         prompt,
       });
+    },
+
+    inPlaceCommand(ref: SessionRef): string | null {
+      const adapter = stages.adapters.find(
+        (candidate) => candidate.capabilities().agent === ref.agent,
+      );
+      return adapter === undefined ? null : adapter.inPlaceCommand(ref.id);
     },
 
     async context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]> {

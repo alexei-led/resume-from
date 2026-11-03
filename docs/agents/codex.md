@@ -27,14 +27,19 @@ The lookup is global. An exact ID wins; a prefix of at least six characters sele
 exactly one matches; several matches are listed as candidates. A file path and a row number are also
 accepted.
 
-When the session belongs to the active Codex profile, the tool prints its native command and writes nothing:
+When the session belongs to the active Codex profile, the tool writes nothing and prints:
 
-```sh
-codex resume <thread-id>
+```text
+Resume in place: /resume <thread-id>
+Resume: cd <dir> && codex resume <thread-id>
 ```
 
 When the session belongs to another agent or Codex profile, or `--to <dir>` is given, the tool shows an import preview
-and the exact `Confirm:` command. After the import it prints `Resume:` for the new thread.
+and the exact `Confirm:` command. After the import it prints the same two lines for the new thread.
+
+Type the `Resume in place:` command in the Codex session where you ran `/resume-from`. Codex opens
+the thread there and moves to its directory. The plugin does not start another Codex process. The
+`Resume:` line is for another terminal.
 
 A missing recorded directory is shown first as `Recover:` git commands, gated by the same
 `Confirm:` token. Nothing is recreated without it.

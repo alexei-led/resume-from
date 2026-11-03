@@ -354,3 +354,15 @@ describe("resumeCommand renders a native, safely quoted command", () => {
     ).toBe("cd /work/app && claude --resume id-1 -- --help");
   });
 });
+
+describe("inPlaceCommand names what the user types in the running agent", () => {
+  const id = "dc601a22-64e3-410b-9321-bb8f86bdc5ad";
+
+  it.each([
+    ["Claude Code", () => claudeAdapter(), `/resume ${id}`],
+    ["Codex", () => codexAdapterFactory.create(), `/resume ${id}`],
+    ["Pi, which switches itself", () => piAdapterFactory.create(), null],
+  ] as const)("%s", (_name, adapter, expected) => {
+    expect(adapter().inPlaceCommand(id)).toBe(expected);
+  });
+});

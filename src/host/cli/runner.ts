@@ -40,6 +40,18 @@ const HOME_NOT_STATED = "";
 const WINDOW_NOT_STATED = 0;
 
 /**
+ * What the user types in the running host to open the session there. A plugin cannot run it
+ * for the user, so the CLI prints it. A bare shell has no running agent.
+ */
+function inPlaceCommand(
+  pipeline: ImportPipeline,
+  target: TargetProfile | null,
+  ref: SessionDescriptor["ref"],
+): string | null {
+  return target === null ? null : pipeline.inPlaceCommand(ref);
+}
+
+/**
  * @param target the profile the pipeline was built for, or null in a bare shell.
  * The shim-stated home wins, but only through the profile builder, which resolves "~/x" and
  * relative paths to absolute form (FR-3, T-CLI-18).
@@ -283,7 +295,12 @@ async function restoreFlow(
     try {
       const command = pipeline.resumeCommand(descriptor, place.directory, request.prompt);
       return {
-        stdout: renderNative(pipeline.summary(descriptor, place), place, command),
+        stdout: renderNative(
+          pipeline.summary(descriptor, place),
+          place,
+          command,
+          inPlaceCommand(pipeline, target, descriptor.ref),
+        ),
         stderr: [],
         exitCode: 0,
       };
@@ -373,7 +390,11 @@ async function importFlow(
   try {
     // Neither Codex nor Claude Code can move the user, so there is no runtime (C-2).
     const result = await pipeline.commit(request, null, suppliedToken);
-    return { stdout: renderLanding(result), stderr: [], exitCode: 0 };
+    return {
+      stdout: renderLanding(result, inPlaceCommand(pipeline, request.target, result.ref)),
+      stderr: [],
+      exitCode: 0,
+    };
   } catch (error) {
     return failure(
       `The import failed: ${messageOf(error)}`,

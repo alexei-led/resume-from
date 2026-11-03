@@ -90,6 +90,11 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
       return describeSession(filePath);
     },
 
+    inPlaceCommand(sessionId: string): string | null {
+      // Claude Code's own /resume opens a session of the active profile from any directory.
+      return `/resume ${sessionId}`;
+    },
+
     resumeCommand(input): string {
       return resumeCommandLine({
         directory: input.directory,

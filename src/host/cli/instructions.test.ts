@@ -11,11 +11,11 @@ test.each(SHIMS)("%s restores the session instead of only previewing it", async 
     "--to <dir>",
     "shell-quoted argv item after `--`",
     "`Confirm:`",
+    "`Resume in place:`",
     "`Resume:`",
     "`Switched.`",
-    "agtermctl session new",
-    "tmux new-window",
-    "`--context`",
+    "Do not start a new terminal",
+    "keeps this process's launch settings",
     '--prompt "<instructions>"',
     "verbatim",
     "Never delete anything, never force git, never edit a session file",
@@ -24,6 +24,8 @@ test.each(SHIMS)("%s restores the session instead of only previewing it", async 
     expect(text).toContain(required);
   }
   expect(text).not.toMatch(/(?:node|npx|resume-from).*\$ARGUMENTS/u);
+  expect(text).not.toContain("agtermctl");
+  expect(text).not.toContain("tmux new-window");
 });
 
 test("the Claude command allows the tools the steps need", async () => {
@@ -32,22 +34,21 @@ test("the Claude command allows the tools the steps need", async () => {
     "utf8",
   );
   const allowed = /^allowed-tools: (.+)$/mu.exec(text)?.[1] ?? "";
-  for (const tool of ["node", "npx", "git", "agtermctl", "tmux"]) {
+  for (const tool of ["node", "npx", "git"]) {
     expect(allowed).toContain(`Bash(${tool}`);
+  }
+  for (const tool of ["agtermctl", "tmux"]) {
+    expect(allowed).not.toContain(`Bash(${tool}`);
   }
 });
 
-test("the Claude command preserves the target profile and wraps agterm shell syntax", async () => {
+test("the Claude command preserves the target profile", async () => {
   const text = await readFile(
     new URL("../../../shims/claude-code/commands/resume-from.md", import.meta.url),
     "utf8",
   );
   expect(text).toContain("--target-home");
   expect(text).toContain("CLAUDE_CONFIG_DIR:-$HOME/.claude");
-  expect(text).toContain("/bin/zsh -lc");
-  expect(text).toContain('--command "$launch" --wait');
-  expect(text).toContain("before reporting success");
-  expect(text).toContain("that same launcher instead of starting a bare");
 });
 
 test("the Codex prompt keeps the pinned package prefix", async () => {

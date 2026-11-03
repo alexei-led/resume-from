@@ -29,7 +29,7 @@ const HELP_LINES = [
   "No argument opens the session selector.",
   "<id-or-prefix> restores the matching session from anywhere.",
   "<file-path> restores an absolute or relative session file.",
-  "A Pi session in this directory switches in place; anything else asks before writing.",
+  "A Pi session switches in place from any directory; anything else asks before writing.",
 ];
 const USAGE_LINE = HELP_LINES[0] ?? `Usage: /${RESUME_FROM_COMMAND_NAME}`;
 const BLOCKED_FALLBACK = "The import is blocked.";
@@ -140,11 +140,11 @@ async function restore(
 
   const target = targetOf(deps, ctx);
   if (descriptor.ref.agent === target.agent) {
-    // Native: the original file, switched in-process only when it is this directory (FR-61).
-    if (place.directory === ctx.cwd) {
-      const outcome = await withDiagnostic(deps.ui, () => pipeline.switchTo(descriptor, ctx));
-      if (outcome === null || outcome.switched) return;
-    }
+    // Native: the original file, switched in process. Pi rebuilds its runtime for the
+    // session's own directory, so the user lands there (FR-61).
+    const outcome = await withDiagnostic(deps.ui, () => pipeline.switchTo(descriptor, ctx));
+    // A failed or declined switch still leaves the user a way in.
+    if (outcome?.switched === true) return;
     showResume(deps.ui, pipeline, descriptor, place);
     return;
   }
@@ -152,7 +152,7 @@ async function restore(
   await importLocated(deps, ctx, pipeline, descriptor, selection);
 }
 
-/** Imports a located descriptor; switches only when the destination is Pi's own directory. */
+/** Imports a located descriptor into its recorded directory, then switches there (FR-44). */
 async function importLocated(
   deps: ResumeFromDeps,
   ctx: PiCommandContext,
@@ -176,9 +176,8 @@ async function importLocated(
       onlyAgent: null,
       onlyHome: null,
     },
-    // Pi's context is the runtime only when the new session lands in the directory Pi is in;
-    // otherwise the import is create-only and the Resume command is shown (FR-61).
-    destination.directory === ctx.cwd ? ctx : null,
+    // Pi's own context is the runtime handle the Pi adapter switches with (FR-44).
+    ctx,
     destination.warning,
   );
 }

@@ -169,6 +169,10 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
     describeSession(_filePath: string): Promise<SessionDescriptor> {
       return Promise.reject(new Error("not a source"));
     },
+    inPlaceCommand(_sessionId: string): string | null {
+      return null;
+    },
+
     resumeCommand(input): string {
       return `${agent} --resume ${input.sessionId}`;
     },

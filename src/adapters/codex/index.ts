@@ -62,6 +62,11 @@ export const codexAdapterFactory: CodexAdapterFactory = {
       },
       findSessions: findCodexSessions,
       describeSession: describeCodexSession,
+      inPlaceCommand(sessionId: string): string | null {
+        // Codex's own /resume opens a session of the active home from any directory.
+        return `/resume ${sessionId}`;
+      },
+
       resumeCommand(input): string {
         return resumeCommandLine({
           directory: input.directory,

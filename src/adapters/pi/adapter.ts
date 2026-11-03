@@ -260,6 +260,11 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       return describePiSession(filePath);
     },
 
+    inPlaceCommand(_sessionId: string): string | null {
+      // Pi needs no typed command: switchTo moves the user in process (FR-44).
+      return null;
+    },
+
     resumeCommand(input): string {
       return resumeCommandLine({
         directory: input.directory,

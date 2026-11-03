@@ -23,7 +23,9 @@ and pipeline results into text.
   native `Resume:` command (FR-61).
 - Restore a located session: print its summary, place it, gate any recovery on its token, then
   resume natively or show the import preview (FR-61).
-- Print the stable labels the skill parses: `Resume:`, `Recover:`, `Confirm:` and `Directory:`.
+- Print the stable labels the skill parses: `Resume in place:`, `Resume:`, `Recover:`, `Confirm:`
+  and `Directory:`. Inside an agent, `Resume in place:` is the target adapter's in-agent command for
+  the session to open (`ImportPipeline.inPlaceCommand`), printed only when the adapter has one (FR-66).
 - With no selection: print the numbered list — agent, home, time, title, turn count — newest first
   (FR-11, FR-14), and print skipped entries (homes or sessions) with their diagnostics.
 - With a selection and no confirmation: print the preview exactly as `PreviewReport.lines` gives it

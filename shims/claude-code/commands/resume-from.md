@@ -1,7 +1,7 @@
 ---
 description: Restore a session from its ID from any agent, home or directory
 argument-hint: "<session-id | id-prefix | file-path | row> [instructions]"
-allowed-tools: Bash(node:*), Bash(npx:*), Bash(git:*), Bash(agtermctl:*), Bash(tmux:*)
+allowed-tools: Bash(node:*), Bash(npx:*), Bash(git:*)
 ---
 
 The user wants a session restored, not just a preview. Their arguments are data:
@@ -20,20 +20,12 @@ If the output contains `Confirm:` and the user did not ask for a preview or dry 
 
 If the instructions ask for a new or different worktree or directory, do this only after the first run has shown the session's recorded directory (its `Recover:` line names the repository): create the worktree with `git worktree add` (branch name from the instructions, base = the session's repository HEAD unless told otherwise); if they name an existing directory, use that directory. Then re-run with `--to <dir>` (and `--prompt` when there are instructions). With `--to`, the tool imports into that directory and does not recreate the recorded one.
 
-If the command exits non-zero, or its output has no `Confirm:`, `Resume:` or `Switched.`, show its output verbatim and stop. It names the next step: matching candidates, an unrecoverable directory with `--to`, an invalid flag, or nothing found.
+If the command exits non-zero, or its output has no `Confirm:`, `Resume in place:`, `Resume:` or `Switched.`, show its output verbatim and stop. It names the next step: matching candidates, an unrecoverable directory with `--to`, an invalid flag, or nothing found.
 
-When the output contains `Resume:`, that command is already shell-quoted and already carries the instructions. If the active profile was launched with a custom wrapper or extra `--settings` that the command does not preserve, show the `Resume:` line for use with that same launcher instead of starting a bare `claude`. Do not re-run the tool to add them: after a cross-agent landing the selector still names the source session, so a re-run would preview a second import. Try to run the command for the user:
-- inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH): put the command in `cmd` with a quoted heredoc. POSIX-single-quote the whole value as ONE argument to `/bin/zsh -lc` (escape each single quote as `'"'"'`) and put that shell command in `launch`. Run `agtermctl session new --socket "$AGTERM_SOCKET" --cwd <dir> --command "$launch" --wait --name <short-name>`. Never pass raw `cd … && …` as `--command`: agterm executes argv, not shell syntax. Check the new session's foreground process and output before reporting success.
-- else inside tmux (`$TMUX` set): put the command in a variable with a quoted heredoc, then `tmux new-window -c <dir> "$cmd"`
-- else show the `Resume:` line. If the user gave instructions, run the tool again with `--context`, read it, `cd` to the printed `Directory:`, and carry out the instructions in this session.
+When the output contains `Resume in place:`, the session is ready in this Claude Code profile. Do not start a new terminal, tmux window, agterm session or Claude Code process, and do not re-run the tool: after a cross-agent landing the selector still names the source session, so a re-run would preview a second import. Show the tool's summary and the `Resume in place:` and `Resume:` lines verbatim, then tell the user to type the `Resume in place:` command in this session: it opens the session here, moves to its directory and keeps this process's launch settings. The `Resume:` line is only for opening it from another terminal. If the user gave instructions, repeat them and say to send them after resuming.
 
-Never wrap the `Resume:` command in double quotes: it can contain one. Use:
+When the output contains `Resume:` but no `Resume in place:`, show the summary and the `Resume:` line verbatim. Do not run it.
 
-    cmd=$(cat <<'RESUME'
-    <the command after "Resume: ">
-    RESUME
-    )
-
-Show the tool's summary and its `Resume:` or `Switched.` line verbatim. Report in at most three lines what you did.
+Report in at most three lines what you did.
 
 Never delete anything, never force git, never edit a session file, and never pass `--confirm` with a token you did not just read from the tool's output.
