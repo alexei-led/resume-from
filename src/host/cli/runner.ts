@@ -16,6 +16,7 @@ import type {
   ListRequest,
   Place,
   PreviewReport,
+  SelectionInput,
   SessionDescriptor,
   TargetProfile,
 } from "./contract.js";
@@ -73,7 +74,8 @@ async function run(
   if (target === null && to !== null) {
     return failure(
       "--to needs the agent to import into, and a bare shell has none.",
-      "Run this from the agent's slash command, or pass --target-agent.",
+      `Run it from the agent's slash command, or as: resume-from --target-agent <agent> -- ` +
+        `${quoteArgument(selectorText(selection))} --to <dir>`,
     );
   }
 
@@ -169,7 +171,8 @@ async function restoreFlow(
     if (target === null) {
       return failure(
         "--context needs the agent it is running inside.",
-        "Run --context from the agent's slash command or prompt, or pass --target-agent.",
+        `Run it from the agent's slash command or prompt, or as: resume-from --target-agent ` +
+          `<agent> -- ${quoteArgument(selectorText(request.selection))} --context`,
       );
     }
     try {
@@ -210,13 +213,19 @@ async function restoreFlow(
         ...renderWarnings(place.warnings),
         ...(place.reason === null ? [] : [`⚠ ${safeText(place.reason)}`]),
       ],
-      stderr: ["Recreate the session's directory, then run the command again."],
+      stderr: [
+        "Recreate the session's directory, then run the command again. To import into an existing " +
+          "checkout of the same repository instead, run it again with --to <dir> (from the agent's " +
+          "slash command, or with --target-agent).",
+      ],
       exitCode: 1,
     };
   }
 
   let recovered = false;
-  if (place.state === "recoverable") {
+  // --to names the destination: the recorded directory is not needed, so its recovery is not
+  // offered and never runs (the user asked for another checkout, not the old one).
+  if (place.state === "recoverable" && request.to === null) {
     const token = pipeline.recoveryToken(descriptor, place);
     if (token === null) {
       return failure("The recovery plan could not be bound to a confirmation token.");
@@ -393,6 +402,13 @@ function renderCommand(invocation: CliInvocation, argv: string[]): string {
 function quoteArgument(argument: string): string {
   if (/^[A-Za-z0-9_./:=+-]+$/.test(argument)) return argument;
   return `'${argument.replaceAll("'", `'"'"'`)}'`;
+}
+
+/** The selector as the user would type it again, for a runnable re-run hint. */
+function selectorText(selection: SelectionInput | null): string {
+  if (selection === null) return "<session-id>";
+  if (selection.by === "row") return String(selection.row);
+  return selection.by === "session-id" ? selection.id : selection.path;
 }
 
 function messageOf(error: unknown): string {

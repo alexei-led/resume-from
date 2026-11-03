@@ -283,7 +283,7 @@ describe("T-CLI-25 the identifier flow", () => {
     expect(calls.order).not.toContain("recover");
   });
 
-  it("shows the destination warning in the recovery preview", async () => {
+  it("shows the destination warning without offering a recovery the user did not ask for", async () => {
     const located = descriptor({ startDirectory: "/gone/app", repoPath: "/gone/app" });
     const warning =
       "the session's recorded directory /gone/app is missing; importing into /work/other anyway";
@@ -318,7 +318,9 @@ describe("T-CLI-25 the identifier flow", () => {
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.stdout.join("\n")).toContain(warning);
-    expect(outcome.stdout.join("\n")).toContain("Recover:");
+    // --to names the destination: the recorded directory is not recreated.
+    expect(outcome.stdout.join("\n")).not.toContain("Recover:");
+    expect(outcome.stdout.join("\n")).toContain("Confirm:");
   });
 
   it("sanitizes an unrecoverable summary before printing it", async () => {
@@ -357,8 +359,26 @@ describe("T-CLI-25 the identifier flow", () => {
 
     expect(outcome.exitCode).toBe(2);
     expect(outcome.stderr.join("\n")).toContain("bare shell");
+    // The fix must be runnable as printed, not an option the bare parser rejects.
+    expect(outcome.stderr.join("\n")).toContain(
+      "resume-from --target-agent <agent> -- sess-1 --to <dir>",
+    );
     expect(calls.preview).toHaveLength(0);
     expect(calls.commit).toHaveLength(0);
+  });
+
+  it("refuses --context in a bare shell with the runnable form", async () => {
+    const { pipeline } = stubPipeline();
+
+    const outcome = await createCliRunner(null).run(
+      invocation({ argv: ["sess-1", "--context"], targetAgent: null }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain(
+      "resume-from --target-agent <agent> -- sess-1 --context",
+    );
   });
 });
 

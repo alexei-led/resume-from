@@ -352,6 +352,41 @@ test("CLI refuses --to into a different repository before recreating a worktree"
   expect(await snapshot(scene.targetHome)).toEqual({});
 });
 
+test("CLI --to imports into the named checkout without recreating the recorded directory", async () => {
+  const scene = await bench("main-to-nested", "codex");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+
+  // The main checkout is an existing checkout of the same repository; the recorded linked
+  // worktree is gone.
+  const preview = await scene.run([scene.id, "--to", scene.main]);
+
+  expect(preview.exitCode).toBe(0);
+  expect(preview.stderr).toEqual([]);
+  const shown = preview.stdout.join("\n");
+  expect(shown).not.toContain("Recover:");
+  expect(shown).toContain("Confirm:");
+  // The recorded worktree the user did not ask for stays absent.
+  expect(await snapshot(scene.linked)).toEqual({});
+});
+
+test("CLI resumes natively from a session whose last line was cut mid-write", async () => {
+  const scene = await bench("sibling-to-external");
+  // A crashed agent leaves a complete conversation with an incomplete trailing entry.
+  const lines = (await readFile(scene.file, "utf8")).trimEnd().split("\n");
+  const last = lines[lines.length - 1] ?? "";
+  lines[lines.length - 1] = last.slice(0, Math.floor(last.length / 2));
+  await writeFile(scene.file, `${lines.join("\n")}\n`);
+
+  const outcome = await scene.run([scene.id]);
+
+  expect(outcome.exitCode).toBe(0);
+  expect(outcome.stderr).toEqual([]);
+  const shown = outcome.stdout.join("\n");
+  expect(shown).toContain("Resume: cd ");
+  expect(shown).toContain(` && claude --resume ${scene.id}`);
+});
+
 test("CLI names an unrecoverable directory and exits 1", async () => {
   const scene = await bench("sibling-to-external");
   await scene.transcript([scene.linked, scene.linked]);
@@ -359,6 +394,8 @@ test("CLI names an unrecoverable directory and exits 1", async () => {
   const outcome = await scene.run([scene.id]);
   expect(outcome.exitCode).toBe(1);
   expect(outcome.stdout.join("\n")).toContain("cannot be recovered");
+  // The documented escape hatch must be named, not only "recreate the old path".
+  expect(outcome.stderr.join("\n")).toContain("--to <dir>");
   expect(await snapshot(scene.targetHome)).toEqual({});
 });
 

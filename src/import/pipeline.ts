@@ -371,12 +371,18 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
         };
       }
       // The branch and commit a recovery may use are recorded in the conversation, not the row.
-      const session = await load(descriptor);
-      const place = await stages.recovery.place({
-        directory,
-        branch: session.provenance.repo.branch,
-        commit: session.provenance.repo.commit,
-      });
+      // A file cut mid-entry has no readable conversation, but its directory can still be placed:
+      // a present directory needs neither, and a missing one falls back to the recovery rules.
+      let branch: string | null = null;
+      let commit: string | null = null;
+      try {
+        const session = await load(descriptor);
+        branch = session.provenance.repo.branch;
+        commit = session.provenance.repo.commit;
+      } catch {
+        // The strict loader is an import concern; a native resume never reads the conversation.
+      }
+      const place = await stages.recovery.place({ directory, branch, commit });
       stages.checkCancellation();
       return place;
     },
