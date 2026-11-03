@@ -45,10 +45,9 @@ export const IMPORTED_MODEL = "<synthetic>";
 export const USER_TYPE = "external";
 const EMPTY_TURN_TEXT = "(empty message)";
 const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
-/** A per-session sidecar directory is named after its session. */
-const SIDECAR_DIR_PATTERN = /^[0-9a-fA-F-]{8,}$/;
-const INERT_PROJECT_FILES = new Set(["sessions-index.json", ".session-aliases"]);
-const INERT_PROJECT_DIRS = new Set(["memory"]);
+const INERT_PROJECT_FILES = new Set(["sessions-index.json"]);
+/** The shape a session registration index would take. Notes, scripts and folders are not it. */
+const INDEX_FILE_SUFFIX = ".json";
 const MAX_MINT_ATTEMPTS = 8;
 
 interface EntryContext {
@@ -68,11 +67,13 @@ function deterministicUuid(seed: string, index: number): string {
 }
 
 /**
- * Refuse when the repository's record holds anything this adapter does not recognise.
+ * Refuse when the repository's record holds a JSON file this adapter does not recognise.
  *
- * A stranger in that directory may be a registration index the new session would have to be
- * added to, and adding it would mean opening an existing file for writing. FR-49 outranks
- * convenience, so the adapter declares the limitation instead of guessing (C-3).
+ * Such a file may be a registration index the new session would have to be added to, and
+ * adding it would mean opening an existing file for writing. FR-49 outranks convenience, so
+ * the adapter declares the limitation instead of guessing (C-3). Claude Code reads only
+ * session files there, so folders and other files (users and agents keep notes, scripts and
+ * state beside the sessions) cannot hold a registration and are left alone.
  */
 function refuseUnrecognisedProjectRecord(home: string, repoPath: string): void {
   const dir = projectDir(home, repoPath);
@@ -83,10 +84,8 @@ function refuseUnrecognisedProjectRecord(home: string, repoPath: string): void {
     return; // a record that does not exist yet is a new path, which is exactly what is allowed
   }
   for (const item of items) {
-    if (item.isFile() && item.name.endsWith(SESSION_FILE_SUFFIX)) continue;
-    if (item.isFile() && INERT_PROJECT_FILES.has(item.name)) continue;
-    if (item.isDirectory() && SIDECAR_DIR_PATTERN.test(item.name)) continue;
-    if (item.isDirectory() && INERT_PROJECT_DIRS.has(item.name)) continue;
+    if (!item.isFile() || !item.name.endsWith(INDEX_FILE_SUFFIX)) continue;
+    if (INERT_PROJECT_FILES.has(item.name)) continue;
     throw new Error(
       `Claude Code adapter: ${path.join(dir, item.name)} is not a session file this adapter ` +
         "recognises. Registering the imported session may require editing it, and this adapter " +
