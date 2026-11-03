@@ -162,6 +162,14 @@ describe("T-PI-5 — every assistant message carries a usage object", () => {
     }
   });
 
+  it("marks imported turns so Pi does not try to restore a model", () => {
+    // Pi's `getBranchSelection` skips an assistant turn whose api is `pi-virtual`. Without
+    // this marker an interactive resume prints "Could not restore model …" (Pi 1.5.0).
+    for (const entry of assistants) {
+      expect((entry.message as { api?: string }).api).toBe("pi-virtual");
+    }
+  });
+
   it("passes its own validation", () => {
     expect(fixedAdapter().validate(serialized)).toEqual([]);
   });

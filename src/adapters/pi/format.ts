@@ -48,8 +48,18 @@ export const DROPPED_BODY_NOTE = "(content dropped: imported session, may be sta
 /** Context window assumed for Pi when configuration overrides none (FR-18). */
 export const DEFAULT_WINDOW_TOKENS = 200_000;
 
-/** What an imported assistant turn declares about itself. It cost nothing to import. */
-export const IMPORTED_API = "resume-from";
+/**
+ * What an imported assistant turn declares about itself. It cost nothing to import.
+ *
+ * `api` is Pi's own marker for a turn that did not come from a physical model
+ * (`pi-virtual`, `VIRTUAL_MODEL_API` in Pi 1.5.0 `core/virtual-models.js`).
+ * `getBranchSelection` skips such turns when it restores the model on resume; without the
+ * marker Pi treats "resume-from/imported-session" as the session's model, cannot find it,
+ * and interactive mode prints `Could not restore model resume-from/imported-session`
+ * (`core/sdk.js`, shown by `modes/interactive/interactive-mode.js`). The assistant text still
+ * reaches the model: providers only drop the thinking blocks of a different model.
+ */
+export const IMPORTED_API = "pi-virtual";
 export const IMPORTED_PROVIDER = "resume-from";
 export const IMPORTED_MODEL = "imported-session";
 
@@ -100,14 +110,21 @@ export function homeOfSessionsRoot(root: string): string {
   return dirname(root);
 }
 
-/** The agent directory that holds a session directory, and so the session file. */
+/**
+ * The agent directory that holds a session directory, and so the session file.
+ *
+ * Pi's layout is `<home>/<sessions dir>/<encoded cwd>/<file>`. The encoded cwd is itself
+ * `--…--`, so a repository whose path contains "sessions" makes that directory match a naive
+ * ancestor walk. Skip the encoded project directory first; only then look for the session root.
+ */
 export function homeOfSessionFile(filePath: string): string {
-  let directory = dirname(filePath);
+  const parent = dirname(filePath);
+  let directory = /^--.*--$/.test(basename(parent)) ? dirname(parent) : parent;
   for (;;) {
     if (basename(directory).includes(SESSIONS_DIR_NAME)) return dirname(directory);
-    const parent = dirname(directory);
-    if (parent === directory) return dirname(filePath);
-    directory = parent;
+    const next = dirname(directory);
+    if (next === directory) return parent;
+    directory = next;
   }
 }
 

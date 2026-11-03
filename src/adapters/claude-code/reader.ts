@@ -6,10 +6,11 @@
  * what this file builds, not by what a caller does with it.
  */
 
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import { sessionIdMatches } from "../id-match.js";
 import { redactSensitiveStructure, redactSensitiveText } from "../redaction.js";
+import { describeFileOnDisk as describeSessionFile } from "../session-file.js";
 import { oneLine } from "../text.js";
 import type {
   CanonicalSession,
@@ -460,13 +461,9 @@ function sortDescriptors(descriptors: SessionDescriptor[]): SessionDescriptor[] 
 
 /** Reads one file into a row, or null when it cannot be read. */
 async function describeFileOnDisk(home: HomePath, file: string): Promise<SessionDescriptor | null> {
-  try {
-    const text = await readFile(file, "utf8");
-    const modified = (await stat(file)).mtime.toISOString();
-    return describeFile(home, file, text, modified);
-  } catch {
-    return null;
-  }
+  return await describeSessionFile(file, (text, modified) =>
+    describeFile(home, file, text, modified),
+  );
 }
 
 /** One row per session file of the home, newest first (FR-11, FR-14). */
@@ -501,10 +498,11 @@ export async function findSessions(root: string, query: string): Promise<Session
 
 /** One session file described directly, for selection by path (FR-12). */
 export async function describeSession(filePath: string): Promise<SessionDescriptor> {
-  const home = homeOfSessionFile(filePath);
-  const text = await readFile(filePath, "utf8");
-  const modified = (await stat(filePath)).mtime.toISOString();
-  return describeFile(home, filePath, text, modified);
+  const descriptor = await describeFileOnDisk(homeOfSessionFile(filePath), filePath);
+  if (descriptor === null) {
+    throw new Error(`cannot read Claude Code session file ${filePath}`);
+  }
+  return descriptor;
 }
 
 /** One session in the neutral vocabulary. A file cut mid-entry is reported, never guessed at. */

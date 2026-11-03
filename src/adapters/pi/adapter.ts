@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
 import { sessionIdMatches } from "../id-match.js";
+import { describeFileOnDisk as describeSessionFile } from "../session-file.js";
 import { resumeCommandLine } from "../shell.js";
 import type {
   AgentAdapter,
@@ -155,13 +156,9 @@ async function describeFileOnDisk(
   home: HomePath,
   filePath: string,
 ): Promise<SessionDescriptor | null> {
-  try {
-    const text = await readFile(filePath, "utf8");
-    const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
-    return describe(home, filePath, text, fileTime);
-  } catch {
-    return null;
-  }
+  return await describeSessionFile(filePath, (text, modified) =>
+    describe(home, filePath, text, modified),
+  );
 }
 
 /** Sessions of one session directory whose ID matches the query (FR-61). */
@@ -179,10 +176,11 @@ async function findPiSessions(root: string, query: string): Promise<SessionDescr
 
 /** One session file described directly, for selection by path (FR-12). */
 async function describePiSession(filePath: string): Promise<SessionDescriptor> {
-  const home = homeOfSessionFile(filePath);
-  const text = await readFile(filePath, "utf8");
-  const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
-  return describe(home, filePath, text, fileTime);
+  const descriptor = await describeFileOnDisk(homeOfSessionFile(filePath), filePath);
+  if (descriptor === null) {
+    throw new Error(`cannot read Pi session file ${filePath}`);
+  }
+  return descriptor;
 }
 
 /** The part of a Pi command context this module uses, and nothing else (C-10). */

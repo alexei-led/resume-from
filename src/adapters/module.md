@@ -497,6 +497,10 @@ module.
   parent's root and every adapter submodule imports `../redaction.js`; a fix reaches every agent at
   once. A submodule using its parent's shared implementation is Internal Design, not a
   cross-module import (T-ROO-7), and the module graph test still rejects a cycle.
+- **One read-and-time step describes a session file.** `session-file.ts` at the parent's root reads
+  the bytes and takes the modification time for every adapter; each adapter supplies only its own
+  parser. A submodule using its parent's shared implementation is Internal Design, not a
+  cross-module import (T-ROO-7), the same rule that keeps `redaction.ts` shared.
 - **Redaction takes each value whole, and the key name is bounded.** A key and its value are matched
   as one span and the value is replaced in full, so no credential is ever left partly in place: a
   quoted key of any length, a URL-encoded or `~`-bearing token, a 4200-character JWT on a `token:`
