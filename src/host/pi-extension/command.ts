@@ -245,7 +245,7 @@ function summaryLines(
 }
 
 function recoveryLines(place: Place): string[] {
-  return (place.recovery?.commands ?? []).map((command) => `Recover: ${command.display}`);
+  return (place.recovery?.commands ?? []).map((command) => `Recover: ${safeText(command.display)}`);
 }
 
 function showResume(
@@ -256,7 +256,7 @@ function showResume(
 ): void {
   ui.show([
     ...summaryLines(pipeline, descriptor, place),
-    `Resume: ${pipeline.resumeCommand(descriptor, place.directory, null)}`,
+    `Resume: ${safeText(pipeline.resumeCommand(descriptor, place.directory, null))}`,
   ]);
 }
 
@@ -333,10 +333,10 @@ function formatFailure(failure: HomeFailure): string {
  * the persisted provenance marker as a transcript entry in the replacement session instead.
  */
 function present(ui: PiUi, landing: LandingResult): void {
-  ui.show(landing.marker.lines);
+  ui.show(landing.marker.lines.map(safeText));
   if (landing.handover !== null) ui.show(formatHandover(landing.handover));
 }
 
 function formatHandover(handover: HandoverInstruction): string[] {
-  return [`Resume: ${handover.command}`];
+  return [`Resume: ${safeText(handover.command)}`];
 }

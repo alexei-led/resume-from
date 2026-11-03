@@ -453,6 +453,29 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
     expect(ui.blocks.flat().join("\n")).toContain("Resume:");
   });
 
+  it("sanitises the Resume command a session directory supplied", async () => {
+    const injected = "/other\u001b[31mred";
+    const located = descriptor({
+      ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+      filePath: "/Users/me/.pi/sessions/--other--/100_pi-1.jsonl",
+      startDirectory: injected,
+    });
+    const { pipeline } = stubPipeline({
+      located,
+      place: present({ directory: injected }),
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    const text = ui.blocks.flat().join("\n");
+    expect(text).toContain("Resume: cd /other red && pi --session");
+    expect(text).not.toContain("\u001b");
+  });
+
   it("does not switch an import whose destination is another directory", async () => {
     const { pipeline, commitCalls } = stubPipeline({
       destination: { directory: "/elsewhere", warning: null },
@@ -882,6 +905,39 @@ describe("T-PIX-20 — a cancelled switch is not a loss", () => {
     expect(ui.blocks).toContainEqual(result.marker.lines);
     expect(pipeline.order).toEqual(["list", "preview", "commit"]);
     expect(context.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sanitises the marker and handover it prints after a landing", async () => {
+    const result = landing({
+      switched: false,
+      handover: { sessionId: "new-7", command: "pi --session /tmp/\u001b[31mred" },
+      marker: {
+        sourceAgent: "codex",
+        sourceHome: "/Users/me/.codex",
+        sourceSessionId: "cx-1",
+        importedAt: "2026-08-03T12:00:00Z",
+        droppedSummary: "12 older turns dropped",
+        lines: ["↻ Restored from codex \u001b[31mred", "  /work · main"],
+      },
+    });
+    const pipeline = stubPipeline({
+      listing: listing([row("codex", "cx-1", "/Users/me/.codex")]),
+      landing: result,
+    });
+    const ui = stubUi(["selected"]);
+    const context = stubContext();
+    const picker = keyPicker(["enter"], ui.ui);
+
+    await createResumeFromCommand(deps({ picker, ui: ui.ui })).run(
+      context.ctx,
+      [],
+      pipeline.pipeline,
+    );
+
+    const shown = ui.blocks.flat().join("\n");
+    expect(shown).toContain("↻ Restored from codex  red");
+    expect(shown).toContain("Resume: pi --session /tmp/ red");
+    expect(shown).not.toContain("\u001b");
   });
 });
 
