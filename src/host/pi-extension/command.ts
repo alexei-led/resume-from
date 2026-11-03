@@ -20,6 +20,8 @@ import type { PiUi } from "./ui.js";
 export const RESUME_FROM_COMMAND_NAME = "resume-from";
 
 const CONFIRM_QUESTION = "Import this session? (y/N)";
+/** A recovery recreates a directory, not the conversation; say which. */
+const RECREATE_QUESTION = "Recreate the missing directory? (y/N)";
 const CANCELLED_LINE = "Cancelled. Nothing was imported.";
 const HELP_ARGUMENTS = new Set(["help", "-h", "--help"]);
 const HELP_LINES = [
@@ -92,12 +94,12 @@ async function restore(
   selection: SelectionInput,
   pipeline: ImportPipeline,
 ): Promise<void> {
-  const descriptor = await withDiagnostic(deps.ui, "lookup", () =>
+  const descriptor = await withDiagnostic(deps.ui, () =>
     pipeline.locate({ selection, cwd: ctx.cwd, onlyAgent: null, onlyHome: null }),
   );
   if (descriptor === null) return;
 
-  let place = await withDiagnostic(deps.ui, "place", () => pipeline.place(descriptor));
+  let place = await withDiagnostic(deps.ui, () => pipeline.place(descriptor));
   if (place === null) return;
 
   if (place.state === "unrecoverable") {
@@ -115,11 +117,11 @@ async function restore(
       return;
     }
     deps.ui.show([...summaryLines(pipeline, descriptor, place), ...recoveryLines(place)]);
-    if ((await deps.ui.confirm(CONFIRM_QUESTION.replace("Import", "Recreate"))) !== "selected") {
+    if ((await deps.ui.confirm(RECREATE_QUESTION)) !== "selected") {
       deps.ui.show([CANCELLED_LINE]);
       return;
     }
-    const result = await withDiagnostic(deps.ui, "recovery", () =>
+    const result = await withDiagnostic(deps.ui, () =>
       pipeline.recover(descriptor, place as Place, token),
     );
     if (result === null) return;
@@ -127,7 +129,7 @@ async function restore(
       deps.ui.show([result.message ?? "The recovery failed."]);
       return;
     }
-    const rechecked = await withDiagnostic(deps.ui, "place", () => pipeline.place(descriptor));
+    const rechecked = await withDiagnostic(deps.ui, () => pipeline.place(descriptor));
     if (rechecked === null) return;
     place = rechecked;
     if (place.state !== "present") {
@@ -140,9 +142,7 @@ async function restore(
   if (descriptor.ref.agent === target.agent) {
     // Native: the original file, switched in-process only when it is this directory (FR-61).
     if (place.directory === ctx.cwd) {
-      const outcome = await withDiagnostic(deps.ui, "switch", () =>
-        pipeline.switchTo(descriptor, ctx),
-      );
+      const outcome = await withDiagnostic(deps.ui, () => pipeline.switchTo(descriptor, ctx));
       if (outcome === null || outcome.switched) return;
     }
     showResume(deps.ui, pipeline, descriptor, place);
@@ -160,7 +160,7 @@ async function importLocated(
   descriptor: SessionDescriptor,
   selection: SelectionInput,
 ): Promise<void> {
-  const destination = await withDiagnostic(deps.ui, "destination", () =>
+  const destination = await withDiagnostic(deps.ui, () =>
     pipeline.destinationFor(descriptor, null),
   );
   if (destination === null) return;
@@ -215,7 +215,7 @@ async function commitAfterPreview(
   runtime: PiCommandContext | null,
   warning: string | null,
 ): Promise<void> {
-  const report = await withDiagnostic(deps.ui, "preview", () => pipeline.preview(request));
+  const report = await withDiagnostic(deps.ui, () => pipeline.preview(request));
   if (report === null) return;
   deps.ui.show(report.lines); // Verbatim and unreordered (FR-21).
 
@@ -229,7 +229,7 @@ async function commitAfterPreview(
   }
   if (warning !== null) deps.ui.show([`⚠ ${warning}`]);
 
-  const landing = await withDiagnostic(deps.ui, "import", () =>
+  const landing = await withDiagnostic(deps.ui, () =>
     pipeline.commit(request, runtime, report.confirmationToken),
   );
   if (landing !== null && !landing.switched) present(deps.ui, landing);
@@ -264,11 +264,7 @@ function showResume(
 }
 
 /** Catch only pipeline failures, not UI errors or presentation after a successful switch. */
-async function withDiagnostic<T>(
-  ui: PiUi,
-  stage: string,
-  operation: () => Promise<T>,
-): Promise<T | null> {
+async function withDiagnostic<T>(ui: PiUi, operation: () => Promise<T>): Promise<T | null> {
   try {
     return await operation();
   } catch (error) {
@@ -282,8 +278,10 @@ async function withDiagnostic<T>(
       if (cause.name === "AbortError") throw error;
       seen.add(cause);
     }
+    // The pipeline's own message already says what failed and what the user can do; an
+    // internal stage name would only add jargon.
     const message = error instanceof Error ? error.message : String(error);
-    ui.show([`The ${stage} failed: ${safeText(message)}`]);
+    ui.show([safeText(message)]);
     return null;
   }
 }
@@ -299,7 +297,7 @@ async function chooseSession(
   pipeline: ImportPipeline,
   scope: ListRequest,
 ): Promise<SelectionInput | null> {
-  const listing = await withDiagnostic(deps.ui, "listing", () => pipeline.list(scope));
+  const listing = await withDiagnostic(deps.ui, () => pipeline.list(scope));
   if (listing === null) return null;
   if (listing.failures.length > 0) {
     deps.ui.show(listing.failures.map(formatFailure)); // Home and session failures are never silent.
