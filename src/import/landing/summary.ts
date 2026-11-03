@@ -17,9 +17,33 @@ function counted(amount: number, one: string, many: string): string {
   return `${amount} ${amount === 1 ? one : many}`;
 }
 
+function globalPattern(source: string): RegExp {
+  return new RegExp(source, "gu");
+}
+
+// A marker line is written into the target's session file and read back by the agent, so it must
+// carry no terminal escape or control character: a crafted session could otherwise forge a label
+// line or move the cursor in the resumed transcript.
+const ANSI_SEQUENCE = globalPattern(
+  String.raw`\x1b(?:\][^\x07]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~])`,
+);
+// `\p{Cf}` removes invisible format controls (bidi overrides and the like); `\p{Zl}`/`\p{Zp}`
+// remove the line and paragraph separators that would otherwise split a stored marker line.
+const UNSAFE_CONTROL = globalPattern(String.raw`[\x00-\x1f\x7f-\x9f\p{Cf}\p{Zl}\p{Zp}]`);
+
+/** Untrusted text with escapes and control characters removed. */
+function safeText(value: string): string {
+  return value.replace(ANSI_SEQUENCE, " ").replace(UNSAFE_CONTROL, " ");
+}
+
+/** Untrusted text collapsed to one sanitised line, with no length limit. */
+function safeComponent(value: string): string {
+  return safeText(value).replace(/\s+/gu, " ").trim();
+}
+
 /** One line of user text, shortened to the room a summary line has. */
 function oneLine(value: string): string {
-  const line = value.replace(/\s+/gu, " ").trim();
+  const line = safeComponent(value);
   return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1)}…` : line;
 }
 
@@ -93,6 +117,8 @@ export function buildMarker(
   home: string = homedir(),
 ): ProvenanceMarker {
   const { ref } = plan.provenance;
+  // Every session-derived part is one-lined and stripped before it joins a marker line, so the
+  // marker keeps its three-line contract whatever the source recorded.
   return {
     sourceAgent: ref.agent,
     sourceHome: ref.home,
@@ -100,9 +126,10 @@ export function buildMarker(
     importedAt,
     droppedSummary: summariseDrops(plan),
     lines: [
-      `↻ Restored from ${ref.agent} ${ref.id.slice(0, 8)} ` +
-        `(${shortenPath(ref.home, home)}) · ${formatTime(importedAt)}`,
-      `  ${directoryText(directory, home)} · ${plan.provenance.repo.branch ?? "no branch"}`,
+      `↻ Restored from ${safeComponent(ref.agent)} ${safeComponent(ref.id.slice(0, 8))} ` +
+        `(${safeComponent(shortenPath(ref.home, home))}) · ${formatTime(importedAt)}`,
+      `  ${safeComponent(directoryText(directory, home))} · ` +
+        `${safeComponent(plan.provenance.repo.branch ?? "no branch")}`,
       `${counted(plan.keptTurnCount, "turn", "turns")} kept · ${summariseDrops(plan)}`,
     ],
   };
