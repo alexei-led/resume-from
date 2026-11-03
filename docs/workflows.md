@@ -1,7 +1,8 @@
 # Common workflows and limitations
 
-`resume-from` restores a saved session: same agent → its own native resume command; different agent
-→ a new native session with the conversation converted. It transfers conversation context, not the
+`resume-from` restores a saved session. In the Claude Code and Codex plugins, the same agent and
+profile home use a native resume command; a different agent or profile home gets a new session with
+the conversation converted. It transfers conversation context, not the
 repository, credentials, or a running process.
 
 ## Restore a session from its ID
@@ -22,8 +23,8 @@ The summary names the session and where it lives:
   ~/.local/share/chezmoi · master
 ```
 
-Then the tool prints `Resume:` (same agent) or an import preview ending in `Confirm:` (different
-agent, or `--to`). Follow that line; it is the exact command to run.
+Then the CLI plugin prints `Resume:` (same agent and profile home) or an import preview ending in
+`Confirm:` (different agent or profile home, or `--to`). Follow that line; it is the exact command to run.
 
 ## Switch to another model, provider, or harness
 

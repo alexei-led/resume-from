@@ -21,13 +21,13 @@ The lookup is global. An exact ID wins; a prefix of at least six characters sele
 exactly one matches; several matches are listed as candidates. A file path and a row number are also
 accepted.
 
-When the session belongs to Claude Code, the tool prints its native command and writes nothing:
+When the session belongs to the active Claude Code profile, the tool prints its native command and writes nothing:
 
 ```sh
 claude --resume <session-id>
 ```
 
-When the session belongs to another agent, or `--to <dir>` is given, the tool shows an import preview
+When the session belongs to another agent or Claude Code profile, or `--to <dir>` is given, the tool shows an import preview
 and the exact `Confirm:` command. After the import it prints `Resume:` for the new session.
 
 A missing recorded directory is shown first as `Recover:` git commands, gated by the same
@@ -72,3 +72,13 @@ Add other source profiles in the shared [configuration file](../configuration.md
 
 The plugin runs its bundled `dist/bin.js`. A separate global install of `resume-from` is not
 necessary.
+
+The active `CLAUDE_CONFIG_DIR` is the import target. A personal session restored from a work
+profile is imported into the work profile, not reopened in the personal one. Non-default profile
+homes remain explicit in the printed resume command.
+
+If your launcher supplies extra settings (for example, `claude-work`), use that same launcher with
+the new session ID. A profile home alone does not preserve launch-time provider settings.
+
+For agterm, the plugin wraps shell commands in `/bin/zsh -lc` and holds the pane open with
+`--wait` so an early error remains visible.

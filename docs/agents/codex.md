@@ -27,13 +27,13 @@ The lookup is global. An exact ID wins; a prefix of at least six characters sele
 exactly one matches; several matches are listed as candidates. A file path and a row number are also
 accepted.
 
-When the session belongs to Codex, the tool prints its native command and writes nothing:
+When the session belongs to the active Codex profile, the tool prints its native command and writes nothing:
 
 ```sh
 codex resume <thread-id>
 ```
 
-When the session belongs to another agent, or `--to <dir>` is given, the tool shows an import preview
+When the session belongs to another agent or Codex profile, or `--to <dir>` is given, the tool shows an import preview
 and the exact `Confirm:` command. After the import it prints `Resume:` for the new thread.
 
 A missing recorded directory is shown first as `Recover:` git commands, gated by the same

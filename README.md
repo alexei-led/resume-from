@@ -65,8 +65,8 @@ What the command does depends on the situation:
 | Situation | Result |
 | --- | --- |
 | Bare shell (no `--target-agent`) | Prints the session's own resume command. Never imports. |
-| Plugin, same agent, no `--to` | Same as bare shell: native resume, nothing written. |
-| Plugin, different agent, or `--to <dir>` | Import preview, then a new native session after confirmation. |
+| CLI plugin, same agent and profile home, no `--to` | Same as bare shell: native resume, nothing written. |
+| CLI plugin, different agent or profile home, or `--to <dir>` | Import preview, then a new native session after confirmation. |
 | Pi, native, session directory is Pi's cwd | Switches Pi to the original session in process. |
 | Missing directory | Shows `Recover:` commands; runs them only with the printed `Confirm:` token. |
 

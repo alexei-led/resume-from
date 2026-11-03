@@ -95,7 +95,9 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
         directory: input.directory,
         argv: ["claude", "--resume", input.sessionId],
         env:
-          input.home === capabilities.defaultHome
+          // A new terminal may not inherit the active profile's environment.
+          input.home === capabilities.defaultHome &&
+          input.home === resolveDefaultHome({}, deps.homeDir)
             ? null
             : { name: CONFIG_DIR_ENV, value: input.home },
         prompt: input.prompt,

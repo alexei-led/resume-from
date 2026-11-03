@@ -20,7 +20,8 @@ boundary.
 7. **Preview** — the import shows source, target, kept and dropped content, token estimate, changed
    files, and warnings. Nothing is written.
 8. **Land** — serialize, validate, commit, read back, and open the session or print its native resume
-   command. The same agent without `--to` skips all of this and prints its own resume command.
+   command. In the CLI plugins, the same agent and profile home without `--to` skip all of this
+   and print the original session's resume command.
 
 The preview and commit use the same deterministic transfer plan. The transfer itself does not call a
 model.

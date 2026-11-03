@@ -502,11 +502,13 @@ HEAD with a warning. A stale registration is pruned first. Recovery never fetche
 or writes into an existing path; a failed command reports git's own message and stops.
 
 **FR-64** — A native resume command is absolute, POSIX-quoted only where needed, and names the
-agent's home variable only when the home is not that agent's default.
+agent's home variable when needed to select the profile. Claude Code keeps a non-default home
+explicit even when it is already set in the current environment, because another terminal may not
+inherit that environment.
 
-**FR-65** — A bare shell (no `--target-agent`) and a plugin whose source agent equals the target
-without `--to` print the source agent's native resume command and write nothing. A different agent,
-or `--to <dir>`, imports with the destination at the session's recorded directory or the override.
+**FR-65** — A bare shell (no `--target-agent`) and a CLI plugin whose source agent and home equal
+the target without `--to` print the source agent's native resume command and write nothing. A
+different agent or profile home, or `--to <dir>`, imports with the destination at the session's recorded directory or the override.
 `--to` must name an existing checkout of the same repository while the recorded directory exists,
 and, when that directory is missing but recoverable, of the repository that would recreate it; the
 check happens before any recovery writes. When the recorded directory is missing and unrecoverable,

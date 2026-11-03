@@ -273,8 +273,12 @@ async function restoreFlow(
     }
   }
 
-  // Same agent, no --to override: the agent's own resume command, and nothing written.
-  const native = target === null || (request.to === null && descriptor.ref.agent === target.agent);
+  // A native resume stays in the source home; another profile needs an import.
+  const native =
+    target === null ||
+    (request.to === null &&
+      descriptor.ref.agent === target.agent &&
+      descriptor.ref.home === target.home);
   if (native) {
     try {
       const command = pipeline.resumeCommand(descriptor, place.directory, request.prompt);
