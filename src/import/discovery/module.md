@@ -230,9 +230,10 @@ interface AgentAdapter {
 
   /**
    * Source role. Directories or glob patterns where this agent keeps session files, including
-   * homes named by its environment. A global lookup expands them (FR-61).
+   * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
+   * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(): string[];
+  searchRoots(home?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
@@ -373,11 +374,13 @@ interface SessionFinder {
 interface SessionLocator {
   /**
    * Resolves a case-insensitive exact ID, or a prefix of at least six characters.
-   * `accept` narrows the candidates before ambiguity is decided.
+   * `accept` narrows the candidates before ambiguity is decided. `home`, when given, is the
+   * only home searched, even when it is outside the configuration (FR-2).
    */
   byId(
     query: string,
     accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
+    home?: HomePath | null,
   ): Promise<SessionDescriptor>;
   /** Describes one session file directly (FR-12). */
   byPath(

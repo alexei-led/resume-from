@@ -22,7 +22,12 @@ import type {
   TargetProfile,
   ValidationDefect,
 } from "./contract.js";
-import { CONFIG_DIR_ENV, searchRoots as claudeSearchRoots, resolveDefaultHome } from "./layout.js";
+import {
+  CONFIG_DIR_ENV,
+  searchRoots as claudeSearchRoots,
+  projectsDir,
+  resolveDefaultHome,
+} from "./layout.js";
 import { readBack } from "./readback.js";
 import { describeSession, findSessions, listSessions, loadSession } from "./reader.js";
 import { serialize, validate } from "./writer.js";
@@ -71,8 +76,10 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
       return loadSession(descriptor);
     },
 
-    searchRoots(): string[] {
-      return claudeSearchRoots(env, deps.homeDir ?? homedir());
+    searchRoots(home?: HomePath): string[] {
+      return home === undefined
+        ? claudeSearchRoots(env, deps.homeDir ?? homedir())
+        : [projectsDir(home)];
     },
 
     findSessions(root: string, query: string): Promise<SessionDescriptor[]> {

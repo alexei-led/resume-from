@@ -234,8 +234,9 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     },
 
-    searchRoots(): string[] {
-      return piSearchRoots();
+    searchRoots(home?: HomePath): string[] {
+      // A named home may hold `sessions`, `sessions-work`, or another `*sessions*` directory.
+      return home === undefined ? piSearchRoots() : [join(home, "*sessions*")];
     },
 
     findSessions(root: string, query: string): Promise<SessionDescriptor[]> {

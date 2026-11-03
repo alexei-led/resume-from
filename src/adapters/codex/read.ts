@@ -370,6 +370,8 @@ export async function listCodexSessions(home: string): Promise<SessionDescriptor
 export async function findCodexSessions(root: string, query: string): Promise<SessionDescriptor[]> {
   const home = homeOfSessionsRoot(root);
   const descriptors: SessionDescriptor[] = [];
+  let failed = 0;
+  let firstFailure: unknown = null;
   for (const filePath of await listRolloutFiles(root)) {
     const name = basename(filePath);
     const id = sessionIdFromRolloutFileName(name);
@@ -385,8 +387,15 @@ export async function findCodexSessions(root: string, query: string): Promise<Se
       if (descriptor !== null) descriptors.push(descriptor);
     } catch (error) {
       if (isNotFoundError(error)) continue;
-      throw error;
+      // One corrupt rollout must not hide the other matches in this root (FR-61): UUIDv7
+      // ids from one minute share a prefix, and a half-written archive is common. The root
+      // still reports a failure when nothing at all could be read.
+      failed += 1;
+      firstFailure ??= error;
     }
+  }
+  if (descriptors.length === 0 && failed > 0) {
+    throw firstFailure instanceof Error ? firstFailure : new Error(String(firstFailure));
   }
   return sortDescriptors(descriptors);
 }

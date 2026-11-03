@@ -31,12 +31,18 @@ interface FoundSession {
   root: string;
 }
 
-/** Expand every adapter's roots, dropping duplicates and non-directories. */
-async function expandRoots(adapters: readonly SourceAdapter[]): Promise<RootSearch[]> {
+/**
+ * Expand every adapter's roots, dropping duplicates and non-directories. With `home`, only the
+ * roots inside that one home are searched, so `--home` reaches a home outside the configuration.
+ */
+async function expandRoots(
+  adapters: readonly SourceAdapter[],
+  home: string | null = null,
+): Promise<RootSearch[]> {
   const seen = new Set<string>();
   const found: RootSearch[] = [];
   for (const adapter of adapters) {
-    for (const pattern of adapter.searchRoots()) {
+    for (const pattern of home === null ? adapter.searchRoots() : adapter.searchRoots(home)) {
       let matches: string[];
       try {
         matches = [];
@@ -128,14 +134,18 @@ const acceptAll: Accept = () => true;
 
 /** Finds one session anywhere. It lists nothing it was not asked for and never writes. */
 export function createSessionLocator(deps: LocatorDeps): SessionLocator {
-  async function sourcesFor(query: string): Promise<RootSearch[]> {
-    return await expandRoots(rankedSources(deps.adapters, query));
+  async function sourcesFor(query: string, home: string | null): Promise<RootSearch[]> {
+    return await expandRoots(rankedSources(deps.adapters, query), home);
   }
 
   return {
-    async byId(query: string, accept: Accept = acceptAll): Promise<SessionDescriptor> {
+    async byId(
+      query: string,
+      accept: Accept = acceptAll,
+      home: string | null = null,
+    ): Promise<SessionDescriptor> {
       const wanted = query.trim();
-      const roots = await sourcesFor(wanted);
+      const roots = await sourcesFor(wanted, home);
       const found: FoundSession[] = [];
       for (const entry of roots) {
         let rows: SessionDescriptor[];

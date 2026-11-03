@@ -377,8 +377,8 @@ export function createStubAdapter(options: StubAdapterOptions): AgentAdapter {
       return descriptors;
     },
 
-    searchRoots(): string[] {
-      return [path.join(options.home, SESSIONS_DIR)];
+    searchRoots(home?: HomePath): string[] {
+      return [path.join(home ?? options.home, SESSIONS_DIR)];
     },
 
     async findSessions(root: HomePath, query: string): Promise<SessionDescriptor[]> {

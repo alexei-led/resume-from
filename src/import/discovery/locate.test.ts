@@ -127,6 +127,21 @@ describe("byId", () => {
     expect(await locator.roots()).toEqual([claudeRoot]);
   });
 
+  it("searches a named home outside the default roots", async () => {
+    const { claudeRoot } = await scene();
+    const named = await makeDir(root, "outside", "claude-team", "projects");
+    await writeSession(named, { id: V4, updatedAt: "2026-05-01T08:00:00Z", repoPath: null });
+    const locator = createSessionLocator({
+      adapters: [
+        makeStubAdapter({ agent: "claude-code", defaultHome: claudeRoot, roots: [claudeRoot] }),
+      ],
+    });
+
+    // The default roots do not reach the named home; --home must.
+    await expect(locator.byId(V4)).rejects.toThrow("No session matches");
+    expect((await locator.byId(V4, undefined, named)).filePath).toBe(join(named, `${V4}.json`));
+  });
+
   it("names the roots it searched when nothing matches", async () => {
     const { claudeRoot, codexRoot } = await scene();
     const locator = createSessionLocator({

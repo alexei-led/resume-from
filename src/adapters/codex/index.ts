@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { resumeCommandLine } from "../shell.js";
 import type { AgentAdapter, AgentCapabilities, CodexAdapterFactory } from "./contract.js";
 import {
@@ -13,7 +14,13 @@ import {
   loadCodexSession,
 } from "./read.js";
 import { readBackCodex, switchToCodex } from "./readback.js";
-import { CODEX_HOME_ENV, searchRoots as codexSearchRoots, defaultCodexHome } from "./rollout.js";
+import {
+  ARCHIVED_SESSIONS_DIR,
+  CODEX_HOME_ENV,
+  searchRoots as codexSearchRoots,
+  defaultCodexHome,
+  sessionsRoot,
+} from "./rollout.js";
 import { type CodexSerializeDeps, serializeCodex, validateCodex } from "./write.js";
 
 /** Codex's own default for the models it ships with. Configuration overrides it (FR-18). */
@@ -48,7 +55,11 @@ export const codexAdapterFactory: CodexAdapterFactory = {
       capabilities: codexCapabilities,
       listSessions: listCodexSessions,
       loadSession: loadCodexSession,
-      searchRoots: codexSearchRoots,
+      searchRoots(home?: string): string[] {
+        return home === undefined
+          ? codexSearchRoots()
+          : [sessionsRoot(home), join(home, ARCHIVED_SESSIONS_DIR)];
+      },
       findSessions: findCodexSessions,
       describeSession: describeCodexSession,
       resumeCommand(input): string {

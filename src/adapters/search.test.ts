@@ -71,6 +71,21 @@ describe("searchRoots names every profile, including the environment's", () => {
   });
 });
 
+describe("searchRoots names the roots inside one named home", () => {
+  it("maps each named home to its own layout", () => {
+    expect(claudeAdapter().searchRoots("/profiles/claude-work")).toEqual([
+      "/profiles/claude-work/projects",
+    ]);
+    expect(codexAdapterFactory.create().searchRoots("/profiles/codex")).toEqual([
+      "/profiles/codex/sessions",
+      "/profiles/codex/archived_sessions",
+    ]);
+    expect(piAdapterFactory.create().searchRoots("/profiles/pi")).toEqual([
+      "/profiles/pi/*sessions*",
+    ]);
+  });
+});
+
 describe("findSessions matches by ID without parsing a whole home", () => {
   it("finds an exact ID and an uppercase spelling (Claude Code)", async () => {
     const adapter = claudeAdapter();
@@ -153,6 +168,27 @@ describe("Codex archived sessions", () => {
     const old = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
     await utimes(archived, old, old);
     expect(await adapter.findSessions(root, sessionId)).toEqual([]);
+  });
+
+  it("keeps a readable match when a corrupt rollout shares its ID prefix", async () => {
+    const { adapter, root, archived, sessionId } = await archivedFixture();
+    const prefix = sessionId.slice(0, 8);
+    const corrupt = join(root, `rollout-2026-01-01T00-00-00-${prefix}.jsonl.zst`);
+    await writeFile(corrupt, "not a zstd frame");
+
+    const rows = await adapter.findSessions(root, prefix);
+    expect(rows.map((row) => row.filePath)).toEqual([archived]);
+  });
+
+  it("reports a failure when nothing matching could be read", async () => {
+    const adapter = codexAdapterFactory.create();
+    const home = await throwawayHome("codexbroken");
+    const root = join(home, "archived_sessions");
+    await mkdir(root, { recursive: true });
+    const id = "019d1e2f-3a4b-7c5d-8e9f-0123456789ab";
+    await writeFile(join(root, `rollout-2026-01-01T00-00-00-${id}.jsonl.zst`), "not a zstd frame");
+
+    await expect(adapter.findSessions(root, id.slice(0, 8))).rejects.toThrow();
   });
 });
 

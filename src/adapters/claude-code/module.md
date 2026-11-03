@@ -322,9 +322,10 @@ interface AgentAdapter {
 
   /**
    * Source role. Directories or glob patterns where this agent keeps session files, including
-   * homes named by its environment. A global lookup expands them (FR-61).
+   * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
+   * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(): string[];
+  searchRoots(home?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.

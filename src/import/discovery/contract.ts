@@ -110,11 +110,13 @@ export interface DiscoveryDestination {
 export interface SessionLocator {
   /**
    * Resolves a case-insensitive exact ID, or a prefix of at least six characters.
-   * `accept` narrows the candidates before ambiguity is decided.
+   * `accept` narrows the candidates before ambiguity is decided. `home`, when given, is the
+   * only home searched, even when it is outside the configuration (FR-2).
    */
   byId(
     query: string,
     accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
+    home?: HomePath | null,
   ): Promise<SessionDescriptor>;
   /** Describes one session file directly (FR-12). */
   byPath(

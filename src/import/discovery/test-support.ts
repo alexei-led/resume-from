@@ -104,7 +104,8 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
   return {
     calls,
     capabilities,
-    searchRoots: () => options.roots ?? [options.defaultHome],
+    searchRoots: (home?: string) =>
+      home === undefined ? (options.roots ?? [options.defaultHome]) : [home],
     async findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
       calls.push(root);
       const names = (await readdir(root).catch(() => [])).filter((n) => n.endsWith(".json"));
