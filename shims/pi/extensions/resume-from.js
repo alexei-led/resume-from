@@ -1,5 +1,3 @@
-import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { activatePiExtension } from "resume-from";
 import { formatRow, safeLines, safeText } from "resume-from/pi-extension";
@@ -32,12 +30,6 @@ function renderProvenance(entry, { expanded }, theme) {
     },
     invalidate() {},
   };
-}
-
-function agentHome() {
-  const configured = process.env.PI_CODING_AGENT_DIR;
-  if (configured === undefined) return join(homedir(), ".pi", "agent");
-  return isAbsolute(configured) ? configured : resolve(configured);
 }
 
 /** Split the raw command line on whitespace, honouring simple single and double quotes. */
@@ -111,14 +103,13 @@ export default function resumeFrom(pi) {
   pi.registerCommand(COMMAND_NAME, {
     description: DESCRIPTION,
     async handler(rawArgs, context) {
-      const home = agentHome();
       let command;
-      await activatePiExtension({
+      const target = await activatePiExtension({
         agent: "pi",
         registrar: { registerCommand: (definition) => (command = definition) },
         ui: uiFor(context),
         picker: pickerFor(context),
-        home,
+        home: null,
         cwd: context.cwd,
       });
 
@@ -131,7 +122,7 @@ export default function resumeFrom(pi) {
       await command.run(
         {
           cwd: context.cwd,
-          home,
+          home: target.home,
           switchSession: (path, options) =>
             context.switchSession(path, options),
         },

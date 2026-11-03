@@ -113,41 +113,36 @@ describe("Pi package shim provenance", () => {
 });
 
 describe("Pi package shim command boundary", () => {
-  it("uses one absolute home and preserves a path containing spaces as one argument", async () => {
-    const previous = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = "relative-pi-home";
+  it("lets the host resolve the home, and preserves a path containing spaces as one argument", async () => {
     const run = vi.fn().mockResolvedValue(undefined);
+    const resolvedHome = "/resolved/pi-agent";
     activatePiExtension.mockImplementation(async (deps: MockPiActivation) => {
       deps.registrar.registerCommand({
         name: "resume-from",
         description: "test",
         run,
       });
+      return { home: resolvedHome };
     });
 
-    try {
-      const handler = await loadOuterCommand();
-      const context: OuterCommandContext = {
-        cwd: "/repo",
-        hasUI: true,
-        ui: {
-          notify: vi.fn(),
-          confirm: vi.fn().mockResolvedValue(true),
-          select: vi.fn().mockResolvedValue(undefined),
-        },
-        switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
-      };
+    const handler = await loadOuterCommand();
+    const context: OuterCommandContext = {
+      cwd: "/repo",
+      hasUI: true,
+      ui: {
+        notify: vi.fn(),
+        confirm: vi.fn().mockResolvedValue(true),
+        select: vi.fn().mockResolvedValue(undefined),
+      },
+      switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
+    };
 
-      await handler(" 'sessions/my session.jsonl' ", context);
+    await handler(" 'sessions/my session.jsonl' ", context);
 
-      const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
-      expect(activation?.home).toMatch(/\/relative-pi-home$/);
-      expect(run).toHaveBeenCalledOnce();
-      expect(run.mock.calls[0]?.[0].home).toBe(activation?.home);
-      expect(run.mock.calls[0]?.[1]).toEqual(["sessions/my session.jsonl"]);
-    } finally {
-      if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
-      else process.env.PI_CODING_AGENT_DIR = previous;
-    }
+    const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
+    expect(activation?.home).toBeNull();
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0].home).toBe(resolvedHome);
+    expect(run.mock.calls[0]?.[1]).toEqual(["sessions/my session.jsonl"]);
   });
 });

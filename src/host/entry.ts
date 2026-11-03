@@ -19,6 +19,7 @@ import type {
   CliOutcome,
   HomePath,
   SelectionLevel,
+  TargetProfile,
 } from "./contract.js";
 import {
   createKeyPicker,
@@ -114,12 +115,13 @@ export interface PiActivation {
  *
  * Unlike the binary this rejects rather than returning an outcome: there is no exit code to
  * carry the failure, and an extension that registered a command it cannot drive would be worse
- * than one that failed to load.
+ * than one that failed to load. It returns the resolved target so the host can use the same home
+ * the pipeline was built with (FR-3).
  */
 export async function activatePiExtension(
   activation: PiActivation,
   deps: HostDeps = {},
-): Promise<void> {
+): Promise<TargetProfile> {
   const host = await createHost(
     activation.cwd === undefined ? deps : { cwd: activation.cwd, ...deps },
   );
@@ -141,6 +143,7 @@ export async function activatePiExtension(
     // The extension holds no capability knowledge, so the window comes from here (FR-18).
     windowTokens: target.windowTokens,
   });
+  return target;
 }
 
 function pickerFor(activation: PiActivation): SessionPicker {
