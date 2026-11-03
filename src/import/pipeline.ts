@@ -193,7 +193,13 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
   /** One plain-text line per kept turn, the form `--context` prints (FR-61). */
   function turnLine(turn: CanonicalSession["turns"][number]): string {
     if (turn.kind === "tool-call" && turn.toolCall !== null) {
-      return `Tool: ${turn.toolCall.toolName}(${turn.toolCall.argumentsText}) → ${turn.toolCall.outcomeLine}`;
+      const call = turn.toolCall;
+      // Every adapter's outcome line already starts with `name(args) →` (FR-23); name it only
+      // when one did not, exactly as the Claude Code writer does.
+      const line = call.outcomeLine.includes(call.toolName)
+        ? call.outcomeLine
+        : `${call.toolName}(${call.argumentsText}) → ${call.outcomeLine}`;
+      return `Tool: ${line}`;
     }
     if (turn.kind === "summary") return `Summary: ${turn.text}`;
     return turn.role === "user" ? `User: ${turn.text}` : `Agent: ${turn.text}`;
@@ -347,7 +353,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
         return home === null || (await canonicalPath(descriptor.ref.home)) === home;
       };
       return request.selection.by === "session-id"
-        ? await stages.locator.byId(request.selection.id, accept)
+        ? await stages.locator.byId(request.selection.id, accept, home)
         : await stages.locator.byPath(request.selection.path, accept);
     },
 

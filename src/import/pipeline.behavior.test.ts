@@ -276,6 +276,38 @@ describe("T-IMP-23 — the nine directions cannot be told apart", () => {
   });
 });
 
+describe("--context — the conversation an import would keep, as plain text", () => {
+  it("names each tool call once, as Tool: <name>(<args>) → <outcome>", async () => {
+    const world = await newWorld();
+    const turns: CanonicalTurn[] = [
+      message(0, "user", FIRST_REQUEST),
+      tool(1, "Read", "'src/auth-1.ts'", true),
+      tool(2, "Edit", "'src/auth-2.ts'", true),
+      message(3, "agent", "the change is ready"),
+    ];
+    await writeSession(
+      world.homeOf("codex"),
+      referenceSpec({ id: SOURCE_ID, repoPath: world.repoRoot, turns }),
+    );
+    const pipeline = createImportPipeline(worldDeps(world));
+    const descriptor = await pipeline.locate({
+      selection: { by: "session-id", id: SOURCE_ID },
+      cwd: world.repoRoot,
+      onlyAgent: null,
+      onlyHome: null,
+    });
+
+    const lines = await pipeline.context(descriptor, world.targetFor("codex"));
+
+    expect(lines).toContain(`User: ${FIRST_REQUEST}`);
+    expect(lines).toContain("Agent: the change is ready");
+    expect(lines.filter((line) => line.startsWith("Tool: "))).toEqual([
+      "Tool: Read('src/auth-1.ts') → done",
+      "Tool: Edit('src/auth-2.ts') → done",
+    ]);
+  });
+});
+
 describe("T-IMP-24 — adding a fake fourth agent changes nothing here", () => {
   const FAKE = "fixture-agent" as AgentId;
   const FOUR = [...AGENTS, FAKE];
