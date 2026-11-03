@@ -95,35 +95,6 @@ interface SessionRef {
 }
 ```
 
-<!-- contract: ImportPipeline — restated from src/host/module.md (subset: omits list and preview) -->
-```ts
-/**
- * One import, from listing to landing, plus the restore operations an identifier flow needs.
- * Every host drives these calls; none of the stages behind them is exported (FR-60).
- */
-interface ImportPipeline {
-  /** Runs only after the user confirmed the preview (FR-20). */
-  commit(
-    request: ImportRequest,
-    runtime: AgentRuntime,
-    confirmationToken: string,
-  ): Promise<LandingResult>;
-}
-```
-
-<!-- contract: ImportRequest — restated from src/host/module.md (subset: omits ListRequest) -->
-```ts
-/** What to preview, and later what to commit (FR-16, FR-20). */
-interface ImportRequest {
-  /** Host-supplied absolute working directory; preserve native subdirectory and symlink spelling. */
-  destinationCwd: string;
-  target: TargetProfile;
-  selection: SelectionInput;
-  onlyAgent: AgentId | null;
-  onlyHome: HomePath | null;
-}
-```
-
 <!-- contract: SelectionInput — restated from src/host/module.md -->
 ```ts
 /** How the user named the session to import (FR-12). */

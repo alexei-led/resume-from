@@ -199,7 +199,7 @@ interface ProvenanceMarker {
 }
 ```
 
-<!-- contract: SelectionLevel, LandingLevel, AdapterRole, ProvenanceSupport, AgentCapabilities — restated from src/adapters/module.md -->
+<!-- contract: SelectionLevel, LandingLevel, AdapterRole, ProvenanceSupport — restated from src/adapters/module.md -->
 ```ts
 /** How the agent lets the user choose a source session (FR-9, FR-10, FR-58). */
 type SelectionLevel = "interactive-picker" | "numbered-list";
@@ -213,23 +213,6 @@ type AdapterRole = "source" | "target";
 /** How the agent can show the marker outside the model context (FR-47, FR-48). */
 type ProvenanceSupport = "out-of-context-entry" | "host-output-only";
 
-/** Everything the rest of the system may know about one agent (FR-58). */
-interface AgentCapabilities {
-  agent: AgentId;
-  roles: AdapterRole[];
-  selection: SelectionLevel;
-  landing: LandingLevel;
-  provenance: ProvenanceSupport;
-  /** Home used when the user names none (FR-3). */
-  defaultHome: HomePath;
-  /** Context window assumed for this agent when configuration overrides none (FR-18). */
-  defaultWindowTokens: number;
-  /**
-   * The order a global ID lookup searches agents in, keyed by the shape of the query (FR-61).
-   * Lower is searched first; equal ranks keep the agent list's order.
-   */
-  idLookup: { v4: number; v7: number; other: number };
-}
 ```
 
 <!-- contract: AgentRuntime — restated from src/import/module.md -->
@@ -283,68 +266,6 @@ interface SwitchOutcome {
 /** The host-supplied absolute destination, preserving native subdirectory and symlink spelling. */
 interface SerializationContext {
   cwd: string;
-}
-```
-
-<!-- contract: AgentAdapter — restated from src/adapters/module.md -->
-```ts
-/** What every agent adapter provides. One folder per agent implements it (FR-57). */
-interface AgentAdapter {
-  capabilities(): AgentCapabilities;
-
-  /** Source role. Opens source files for reading only (FR-8, NG-1, AC-4). */
-  listSessions(home: HomePath): Promise<SessionDescriptor[]>;
-  /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
-  loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
-
-  /**
-   * Source role. Directories or glob patterns where this agent keeps session files, including
-   * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
-   * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
-   */
-  searchRoots(home?: HomePath): string[];
-  /**
-   * Source role. Sessions under one search root whose ID matches `query`. Only matching files
-   * are parsed, never every file of a home.
-   */
-  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
-  /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
-  describeSession(filePath: string): Promise<SessionDescriptor>;
-
-  /**
-   * The native command that resumes the session in its own agent. Paths are absolute and quoted
-   * only when needed; the home variable appears only when it is not the agent's default home.
-   */
-  resumeCommand(input: {
-    home: HomePath;
-    directory: string;
-    sessionId: SessionId;
-    filePath: string;
-    prompt: string | null;
-  }): string;
-
-  /** Target role. Produces bytes only. It never creates a file (FR-49, FR-53). */
-  serialize(
-    session: CanonicalSession,
-    target: TargetProfile,
-    marker: ProvenanceMarker,
-    context: SerializationContext,
-  ): SerializedSession;
-  /** Target role. Checks the structure before placement. Empty means valid (FR-50). */
-  validate(serialized: SerializedSession): ValidationDefect[];
-  /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
-  readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
-
-  /**
-   * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).
-   * `filePath` names an existing session file when the host already holds it (FR-61).
-   */
-  switchTo(
-    home: HomePath,
-    sessionId: SessionId,
-    runtime: AgentRuntime,
-    filePath?: string | null,
-  ): Promise<SwitchOutcome>;
 }
 ```
 
@@ -593,74 +514,6 @@ interface LandingResult {
   itemsSent: number;
   itemsStored: number;
   marker: ProvenanceMarker;
-}
-```
-
-<!-- contract: ListRequest, ImportRequest — restated from src/import/module.md -->
-```ts
-/** What to list (FR-10, FR-15). */
-interface ListRequest {
-  /** Host-supplied absolute working directory; preserve native subdirectory and symlink spelling. */
-  destinationCwd: string;
-  /** Null in a bare shell, where listing needs no target agent (FR-61). */
-  target: TargetProfile | null;
-  onlyAgent: AgentId | null;
-  onlyHome: HomePath | null;
-}
-
-/** What to preview, and later what to commit (FR-16, FR-20). */
-interface ImportRequest {
-  /** Host-supplied absolute working directory; preserve native subdirectory and symlink spelling. */
-  destinationCwd: string;
-  target: TargetProfile;
-  selection: SelectionInput;
-  /**
-   * Set when the session was already located. Discovery then uses this descriptor instead of
-   * listing or parsing any home again (FR-61).
-   */
-  located?: SessionDescriptor | null;
-  /** The initial prompt appended to the resumed session, when the host asked for one (FR-61). */
-  prompt?: string | null;
-  onlyAgent: AgentId | null;
-  onlyHome: HomePath | null;
-}
-```
-
-<!-- contract: ImportPipeline — restated from src/import/module.md -->
-```ts
-/**
- * One import, from listing to landing, plus the restore operations an identifier flow needs.
- * Every host drives these calls; none of the stages behind them is exported (FR-60).
- */
-interface ImportPipeline {
-  list(request: ListRequest): Promise<Listing>;
-  /** Writes nothing (FR-16). */
-  preview(request: ImportRequest): Promise<PreviewReport>;
-  /** Runs only after the user confirmed the preview (FR-20). */
-  commit(
-    request: ImportRequest,
-    runtime: AgentRuntime,
-    confirmationToken: string,
-  ): Promise<LandingResult>;
-
-  /** Resolves a row, ID/prefix or path; an ID or path is not filtered by repository (FR-61). */
-  locate(request: LocateRequest): Promise<SessionDescriptor>;
-  /** Where the session's recorded directory is, and how it could be recreated (FR-61). */
-  place(descriptor: SessionDescriptor): Promise<Place>;
-  /** The two summary lines every restore output starts with (FR-61). */
-  summary(descriptor: SessionDescriptor, place: Place): string[];
-  /** Binds the session file, directory and recovery argv into a token (FR-61). */
-  recoveryToken(descriptor: SessionDescriptor, place: Place): string | null;
-  /** Runs the recovery only when the token matches. A mismatch runs nothing (FR-61). */
-  recover(descriptor: SessionDescriptor, place: Place, token: string): Promise<RecoveryResult>;
-  /** The directory an import records: the session directory, or the --to override (FR-61). */
-  destinationFor(descriptor: SessionDescriptor, to: string | null): Promise<ImportDestination>;
-  /** The source agent's native command that resumes the session in `directory` (FR-61). */
-  resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string;
-  /** The conversation an import into `target` would keep, as plain text lines (FR-61). */
-  context(descriptor: SessionDescriptor, target: TargetProfile): Promise<string[]>;
-  /** Moves the user into an existing session of its own agent (FR-44, FR-61). */
-  switchTo(descriptor: SessionDescriptor, runtime: AgentRuntime): Promise<SwitchOutcome>;
 }
 ```
 
