@@ -1,6 +1,6 @@
 {
   "name": "resume-from",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Continue a coding session in a different agent, or a different profile.",
   "keywords": [
     "pi-package",

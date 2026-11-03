@@ -168,6 +168,27 @@ describe("T-CC-12 — an import that would need to modify an existing file is re
     expect(() => adapter.serialize(REFERENCE_SESSION, target, MARKER, { cwd: REPO })).not.toThrow();
   });
 
+  it("ignores the user's own notes, scripts and folders in the project record", async () => {
+    const home = await populatedHome();
+    const dir = projectDir(home, REPO);
+    await writeFileIn(path.join(dir, "briefs", "brief.md"), "a brief");
+    await writeFileIn(path.join(dir, "state", "lane.md"), "state");
+    await writeFileIn(path.join(dir, "team-rules.md"), "rules");
+    await writeFileIn(path.join(dir, "lead.goal"), "goal");
+    await writeFileIn(path.join(dir, "launch.sh"), "#!/bin/sh");
+    await writeFileIn(path.join(dir, "owners.tsv"), "a\tb");
+    const before = await checksumTree(home);
+    const adapter = createClaudeCodeAdapter();
+    const target: TargetProfile = {
+      agent: "claude-code",
+      home,
+      windowTokens: 200_000,
+    };
+
+    expect(() => adapter.serialize(REFERENCE_SESSION, target, MARKER, { cwd: REPO })).not.toThrow();
+    expect(await checksumTree(home)).toEqual(before);
+  });
+
   it("accepts current inert project records without modifying them", async () => {
     const home = await populatedHome();
     const before = await checksumTree(home);
