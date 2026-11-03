@@ -258,14 +258,19 @@ for (const [contents, source] of [
     .replaceAll("__RESUME_FROM_VERSION__", version);
   if (contents !== expected) throw new Error(`${source} was not faithfully packaged.`);
   for (const required of [
-    "Start the destination agent in the directory whose files you intend to edit",
-    "nested, sibling, or in an arbitrary external directory",
-    "--home",
-    "historical paths alone",
-    "Destination:",
-    "selection diagnostics",
-    "transfer uncommitted work, switch branches, or recreate removed",
-    "Never add `--confirm`",
+    "Split them into a selector",
+    "git worktree add",
+    "--to <dir>",
+    "shell-quoted argv item after `--`",
+    "`Confirm:`",
+    "`Resume:`",
+    "`Switched.`",
+    "agtermctl session new",
+    "tmux new-window",
+    "`--context`",
+    "verbatim",
+    "Never delete anything, never force git, never edit a session file",
+    "Never pass `--confirm` with a token you did not just read",
   ]) {
     if (!contents.includes(required)) throw new Error(`${source} is missing instruction: ${required}`);
   }

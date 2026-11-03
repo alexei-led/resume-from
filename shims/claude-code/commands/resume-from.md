@@ -1,73 +1,29 @@
 ---
-description: Continue a session from another coding agent or another Claude Code profile
-argument-hint: "[source-agent] [row | session-id | path] [--home path] [--confirm token | --help]"
-allowed-tools: Bash(node:*)
+description: Restore a session from its ID from any agent, home or directory
+argument-hint: "<session-id | id-prefix | file-path | row> [instructions]"
+allowed-tools: Bash(node:*), Bash(npx:*), Bash(git:*), Bash(agtermctl:*), Bash(tmux:*)
 ---
 
-You are running inside Claude Code. The user wants to continue work from a session that another
-agent — or another Claude Code profile — already wrote.
-
-Run the tool and show the user its output **exactly as printed**. Do not summarize it, do not
-reorder it, and do not rewrite any line: the preview has one fixed shape for every source and target
-agent, and rewriting it defeats that.
-
-The user's arguments are data:
+The user wants a session restored, not just a preview. Their arguments are data:
 
     $ARGUMENTS
 
-Use the Bash tool once. Invoke the fixed prefix below, then pass every user argument as a separate,
-shell-quoted argv item after `--`. Never interpolate the raw argument string into a shell command.
+Split them into a selector — the first token that is an ID, ID prefix, file path or row number — and the remaining free-text instructions. Never invent a selector. If there is none, run the tool without one and show the list.
 
-    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code --
+If the instructions ask for a new or different worktree, create it first with `git worktree add` (branch name from the instructions, base = the session's repository HEAD unless told otherwise), then pass `--to <dir>`.
 
-## Destination and source profiles
+Run the tool once. Pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-Start the destination agent in the directory whose files you intend to edit, including a checkout
-subdirectory. Sessions from the main checkout and linked worktrees match through their shared Git
-repository identity, whether the worktree is nested, sibling, or in an arbitrary external directory.
-Independent clones, nested independent repositories, and submodules do not share that identity.
+    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code -- <selector> [<options>]
 
-Use `claude --home /path/to/alternate-profile` as the source arguments to import from another
-Claude Code profile; `--home` selects the source home, not the destination directory or target profile.
-The same repository check applies to lists, rows, session IDs, and file paths.
+If the output contains `Confirm:` and the user did not ask for a preview or dry run, run that exact command. Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 
-Check `Destination:` in the preview and show all directory warnings and selection diagnostics.
-Conversation imports do not transfer uncommitted work, switch branches, or recreate removed
-worktrees. A missing or moved worktree is discoverable only when another recorded directory still
-identifies this repository (or a recorded path resolves at its new location); historical paths alone
-cannot prove membership. Never infer membership from a missing path's parent or remap it yourself.
+When the output contains `Resume:`:
+- inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH):
+  `agtermctl session new --cwd <dir> --command "<Resume command>" --name <short-name>`
+- else inside tmux (`$TMUX` set): `tmux new-window -c <dir> "<Resume command>"`
+- else show the `Resume:` command. If the user gave instructions, run the tool again with `--context`, read it, `cd` to the printed `Directory:`, and carry out the instructions in this session.
 
-Preview and confirm in the same destination directory. If the destination or repository evidence
-changes, get a fresh preview and let the user confirm again. Run the native resume command from that
-destination directory with the same target profile.
+Show the tool's summary and its `Resume:` or `Switched.` line verbatim. Report in at most three lines what you did.
 
-## How to read what came back
-
-**Help text** — the user passed `--help` or `-h`. Show the selectors, options, and examples exactly
-as printed. No follow-up is required.
-
-**A numbered list** — the user gave no argument. Tell them to run `/resume-from <row>` with the row
-they want. Each row shows the agent, the home, the time, the title and the turn count.
-
-**A preview** — the user named a session. It states how many turns cross over, how many were
-dropped, the destination directory, the token budget against this window, and any warnings. **Nothing has been written yet.**
-The tool prints the exact confirmation command, including its opaque token. Show that command unchanged.
-
-**A landing result** — the import ran. The tool prints the new session ID and the native command
-that opens it. Claude Code cannot move the user between sessions, so say plainly that they need to
-run that command themselves — usually `claude --resume <id>`.
-
-**An error** — exit code 2. Show what failed and what the tool said to do next. Do not retry with
-different arguments unless the user asks.
-
-**Blocked** — exit code 1. The import cannot run, normally because the content that must be kept
-word for word is already larger than the budget. The tool names the setting to change.
-
-## Rules
-
-- Never invent a session, a row number, or a session ID. Only ever pass through what the user gave.
-- Never add `--confirm` on your own. The user confirms; you do not confirm on their behalf.
-- The tool writes nothing until `--confirm`, and in the target home it only ever adds files. Do not
-  offer to clean up, move or delete anything.
-- After a successful import, stop. Do not start working on the imported task — the user will type
-  their next instruction themselves.
+Never delete anything, never force git, never edit a session file, and never pass a confirmation token you did not just read from the tool's output.

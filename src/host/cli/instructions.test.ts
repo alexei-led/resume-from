@@ -1,25 +1,45 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
 
-test.each(["shims/claude-code/commands/resume-from.md", "shims/codex/prompts/resume-from.md"])(
-  "%s preserves worktree diagnostics and user confirmation",
-  async (path) => {
-    const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
-    for (const required of [
-      "Start the destination agent in the directory whose files you intend to edit",
-      "nested, sibling, or in an arbitrary external directory",
-      "--home",
-      "historical paths alone",
-      "Destination:",
-      "selection diagnostics",
-      "transfer uncommitted work, switch branches, or recreate removed",
-      "exactly as printed",
-      "Never add `--confirm`",
-      "same destination directory",
-    ]) {
-      expect(text).toContain(required);
-    }
-    expect(text).toContain("shell-quoted argv item after `--`");
-    expect(text).not.toMatch(/(?:node|npx).*\$ARGUMENTS/u);
-  },
-);
+const SHIMS = ["shims/claude-code/commands/resume-from.md", "shims/codex/prompts/resume-from.md"];
+
+test.each(SHIMS)("%s restores the session instead of only previewing it", async (path) => {
+  const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
+  for (const required of [
+    "Split them into a selector",
+    "git worktree add",
+    "--to <dir>",
+    "shell-quoted argv item after `--`",
+    "`Confirm:`",
+    "`Resume:`",
+    "`Switched.`",
+    "agtermctl session new",
+    "tmux new-window",
+    "`--context`",
+    "verbatim",
+    "Never delete anything, never force git, never edit a session file",
+    "Never pass `--confirm` with a token you did not just read",
+  ]) {
+    expect(text).toContain(required);
+  }
+  expect(text).not.toMatch(/(?:node|npx|resume-from).*\$ARGUMENTS/u);
+});
+
+test("the Claude command allows the tools the steps need", async () => {
+  const text = await readFile(
+    new URL("../../../shims/claude-code/commands/resume-from.md", import.meta.url),
+    "utf8",
+  );
+  const allowed = /^allowed-tools: (.+)$/mu.exec(text)?.[1] ?? "";
+  for (const tool of ["node", "npx", "git", "agtermctl", "tmux"]) {
+    expect(allowed).toContain(`Bash(${tool}`);
+  }
+});
+
+test("the Codex prompt keeps the pinned package prefix", async () => {
+  const text = await readFile(
+    new URL("../../../shims/codex/prompts/resume-from.md", import.meta.url),
+    "utf8",
+  );
+  expect(text).toContain("npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --");
+});
