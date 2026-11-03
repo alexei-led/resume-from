@@ -117,6 +117,61 @@ function isCancellation(reason: unknown): boolean {
   return reason instanceof Error && reason.name === "AbortError";
 }
 
+/**
+ * One per-request cache: a spelling and its canonical identity, so a symlinked and a real
+ * spelling of the same directory share one Git lookup. `supplied` seeds the destination the
+ * pipeline already resolved, keyed by the spelling the caller used.
+ */
+function createLookup(
+  repo: DiscoveryDeps["repo"],
+  root?: string,
+  supplied?: DiscoveryDestination,
+): Lookup {
+  const directories = new Map<string, Promise<DirectoryEvidence | null>>();
+  const identities = new Map<string, Promise<RepoIdentity>>();
+  if (root !== undefined && supplied !== undefined) {
+    identities.set(supplied.canonicalCwd, Promise.resolve(supplied.identity));
+    directories.set(
+      resolve(root),
+      Promise.resolve({
+        directory: supplied.canonicalCwd,
+        commonDir: supplied.identity.commonDir,
+      }),
+    );
+  }
+  return async (directory) => {
+    repo.checkCancellation();
+    const absolute = resolve(directory);
+    let pending = directories.get(absolute);
+    if (!pending) {
+      pending = (async () => {
+        let canonical: string;
+        try {
+          canonical = await realpath(absolute);
+          repo.checkCancellation();
+        } catch (reason) {
+          if ((reason as NodeJS.ErrnoException).code === "ENOENT") {
+            // The reader still observes cancellation on missing-path short circuits.
+            await repo.identify(absolute);
+            return null;
+          }
+          throw reason;
+        }
+        let identity = identities.get(canonical);
+        if (!identity) {
+          identity = Promise.resolve().then(() => repo.identify(canonical));
+          identities.set(canonical, identity);
+        }
+        return { directory: canonical, commonDir: (await identity).commonDir };
+      })();
+      directories.set(absolute, pending);
+    }
+    const evidence = await pending;
+    repo.checkCancellation();
+    return evidence;
+  };
+}
+
 export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
   async function collect(
     target: SearchTarget,
@@ -201,41 +256,7 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
     supplied?: DiscoveryDestination,
   ): Promise<Listing> {
     deps.repo.checkCancellation();
-    // Both caches live for this listing only. The spelling cache shares missing paths and
-    // filesystem failures; the canonical cache also shares Git lookups through symlink aliases.
-    const directories = new Map<string, Promise<DirectoryEvidence | null>>();
-    const identities = new Map<string, Promise<RepoIdentity>>();
-    const lookup: Lookup = async (directory) => {
-      deps.repo.checkCancellation();
-      const absolute = resolve(directory);
-      let pending = directories.get(absolute);
-      if (!pending) {
-        pending = (async () => {
-          let canonical: string;
-          try {
-            canonical = await realpath(absolute);
-            deps.repo.checkCancellation();
-          } catch (reason) {
-            if ((reason as NodeJS.ErrnoException).code === "ENOENT") {
-              // The reader still observes cancellation on missing-path short circuits.
-              await deps.repo.identify(absolute);
-              return null;
-            }
-            throw reason;
-          }
-          let identity = identities.get(canonical);
-          if (!identity) {
-            identity = Promise.resolve().then(() => deps.repo.identify(canonical));
-            identities.set(canonical, identity);
-          }
-          return { directory: canonical, commonDir: (await identity).commonDir };
-        })();
-        directories.set(absolute, pending);
-      }
-      const evidence = await pending;
-      deps.repo.checkCancellation();
-      return evidence;
-    };
+    const lookup = createLookup(deps.repo, scope.repoRoot, supplied);
     let destination: DirectoryEvidence | null;
     try {
       if (supplied !== undefined) {
@@ -244,14 +265,6 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
         if (canonical !== supplied.canonicalCwd) {
           throw new Error("Destination evidence does not match the requested directory");
         }
-        identities.set(canonical, Promise.resolve(supplied.identity));
-        directories.set(
-          resolve(scope.repoRoot),
-          Promise.resolve({
-            directory: canonical,
-            commonDir: supplied.identity.commonDir,
-          }),
-        );
       }
       destination = await lookup(scope.repoRoot);
     } catch (reason) {
@@ -296,25 +309,7 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
   /** True when one recorded directory of the session belongs to the repository at `directory`. */
   async function belongs(descriptor: SessionDescriptor, directory: string): Promise<boolean> {
     deps.repo.checkCancellation();
-    const cache = new Map<string, Promise<DirectoryEvidence | null>>();
-    const lookup: Lookup = async (value) => {
-      const absolute = resolve(value);
-      let pending = cache.get(absolute);
-      if (!pending) {
-        pending = (async () => {
-          try {
-            const canonical = await realpath(absolute);
-            const identity = await deps.repo.identify(canonical);
-            return { directory: canonical, commonDir: identity.commonDir };
-          } catch (reason) {
-            if ((reason as NodeJS.ErrnoException).code === "ENOENT") return null;
-            throw reason;
-          }
-        })();
-        cache.set(absolute, pending);
-      }
-      return await pending;
-    };
+    const lookup = createLookup(deps.repo);
 
     let destination: DirectoryEvidence | null;
     try {

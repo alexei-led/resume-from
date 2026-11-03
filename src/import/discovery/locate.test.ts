@@ -124,7 +124,6 @@ describe("byId", () => {
     });
 
     expect((await locator.byId(V4)).filePath).toBe(join(claudeRoot, `${V4}.json`));
-    expect(await locator.roots()).toEqual([claudeRoot]);
   });
 
   it("searches a named home outside the default roots", async () => {

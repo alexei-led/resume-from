@@ -223,9 +223,5 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
         `"${filePath}" is not a session file this tool can read.`,
       );
     },
-
-    async roots(): Promise<string[]> {
-      return (await expandRoots(deps.adapters)).map((entry) => entry.root);
-    },
   };
 }

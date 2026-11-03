@@ -7,6 +7,7 @@ import { mkdir, mkdtemp, readdir, readFile, readlink, realpath, writeFile } from
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { vi } from "vitest";
+import { sessionIdMatches } from "../../adapters/id-match.js";
 import type {
   AdapterRole,
   AgentCapabilities,
@@ -109,14 +110,10 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
     async findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
       calls.push(root);
       const names = (await readdir(root).catch(() => [])).filter((n) => n.endsWith(".json"));
-      const wanted = query.toLowerCase();
       const rows: SessionDescriptor[] = [];
       for (const name of names) {
         const id = name.slice(0, -".json".length);
-        const matches =
-          id.toLowerCase() === wanted ||
-          (wanted.length >= 6 && id.toLowerCase().startsWith(wanted));
-        if (!matches) continue;
+        if (!sessionIdMatches(id, query)) continue;
         rows.push(await describeFile(options.defaultHome, path.join(root, name)));
       }
       return rows;

@@ -387,8 +387,6 @@ interface SessionLocator {
     filePath: string,
     accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
   ): Promise<SessionDescriptor>;
-  /** Every search root, fully resolved, in the order a lookup visits them. */
-  roots(): Promise<string[]>;
 }
 ```
 
