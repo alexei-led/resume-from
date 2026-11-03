@@ -213,8 +213,16 @@ export interface ImportPipeline {
   recoveryToken(descriptor: SessionDescriptor, place: Place): string | null;
   /** Runs the recovery only when the token matches. A mismatch runs nothing (FR-61). */
   recover(descriptor: SessionDescriptor, place: Place, token: string): Promise<RecoveryResult>;
-  /** The directory an import records: the session directory, or the --to override (FR-61). */
-  destinationFor(descriptor: SessionDescriptor, to: string | null): Promise<ImportDestination>;
+  /**
+   * The directory an import records: the session directory, or the --to override (FR-61).
+   * `place` is the session's place when the caller already resolved it, so a recoverable
+   * directory's repository can be checked before a recovery writes anything.
+   */
+  destinationFor(
+    descriptor: SessionDescriptor,
+    to: string | null,
+    place?: Place | null,
+  ): Promise<ImportDestination>;
   /** The source agent's native command that resumes the session in `directory` (FR-61). */
   resumeCommand(descriptor: SessionDescriptor, directory: string, prompt: string | null): string;
   /** The conversation an import into `target` would keep, as plain text lines (FR-61). */

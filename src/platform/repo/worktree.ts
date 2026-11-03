@@ -176,15 +176,21 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       commands.push(command(repoRoot, ["worktree", "prune"]));
     }
 
+    let busyBranch: string | null = null;
     const headFallback = (): void => {
       commands.push(command(repoRoot, ["worktree", "add", "--detach", directory, "HEAD"]));
-      warnings.push("recorded branch/commit not found; worktree starts at the repository's HEAD");
+      warnings.push(
+        busyBranch === null
+          ? "recorded branch/commit not found; worktree starts at the repository's HEAD"
+          : `the new worktree starts detached at the repository's HEAD`,
+      );
     };
 
     if (branch !== null) {
       const local = await refExists(repoRoot, `refs/heads/${branch}`);
       const checkedOutElsewhere = local && branchCheckedOutElsewhere(entries, branch, directory);
       if (checkedOutElsewhere) {
+        busyBranch = branch;
         warnings.push(
           `recorded branch ${branch} is already checked out in another worktree; it is not reused`,
         );
@@ -226,6 +232,9 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       checkCancellation();
       const directory = resolve(request.directory);
       const warnings: string[] = [];
+      // When the directory is missing there is no checkout to read a branch from, so the
+      // summary shows the branch the session recorded (FR-61).
+      const recordedBranch = request.branch?.trim() ? request.branch.trim() : null;
 
       if (await isDirectory(directory)) {
         const branch = await currentBranch(directory, git);
@@ -252,7 +261,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
         return {
           state: "unrecoverable",
           directory,
-          branch: null,
+          branch: recordedBranch,
           warnings,
           recovery: null,
           reason: `no repository was found for ${directory}`,
@@ -262,14 +271,14 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       const recovery = await stepsFor(
         repoRoot,
         directory,
-        request.branch?.trim() ? request.branch.trim() : null,
+        recordedBranch,
         request.commit?.trim() ? request.commit.trim() : null,
       );
       checkCancellation();
       return {
         state: "recoverable",
         directory,
-        branch: null,
+        branch: recordedBranch,
         warnings: [...warnings, ...recovery.warnings],
         recovery,
         reason: null,

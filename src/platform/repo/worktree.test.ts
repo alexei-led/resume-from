@@ -58,6 +58,8 @@ describe("place", () => {
     expect(place.state).toBe("unrecoverable");
     expect(place.recovery).toBeNull();
     expect(place.reason).toContain(missing);
+    // The checkout is gone, so the summary shows the branch the session recorded.
+    expect(place.branch).toBe("main");
   });
 });
 
@@ -71,6 +73,8 @@ describe("recovery planning and execution", () => {
     const directory = join(`${repo}.worktrees`, name);
     const place = await createWorktreeRecovery().place({ directory, branch, commit });
     expect(place.state).toBe("recoverable");
+    // The recorded branch is shown even though there is no checkout to read it from.
+    expect(place.branch).toBe(branch);
     if (place.recovery === null) throw new Error("no recovery plan");
     return { directory, plan: place.recovery };
   }

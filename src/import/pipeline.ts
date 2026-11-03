@@ -414,6 +414,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
     async destinationFor(
       descriptor: SessionDescriptor,
       to: string | null,
+      place: Place | null = null,
     ): Promise<ImportDestination> {
       const recorded = descriptor.startDirectory ?? descriptor.repoPath;
       if (to === null) {
@@ -447,6 +448,19 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
         throw destinationFailure(
           `The --to directory ${directory} is not a git checkout. Name an existing checkout of a repository.`,
         );
+      }
+      // A recoverable directory is not there yet, so its membership cannot be read from it.
+      // The recovery plan names the repository the recreated directory will belong to; a
+      // --to checkout of a different repository is refused before any worktree is written
+      // (revised NG-9). The check runs on the plan, so it precedes the recovery.
+      const anchor = place?.state === "recoverable" ? place.recovery?.commands[0]?.cwd : undefined;
+      if (anchor !== undefined && anchor !== "") {
+        const anchorCommon = (await stages.destinationFor(anchor)).identity.commonDir;
+        if (anchorCommon === null || anchorCommon !== destination.identity.commonDir) {
+          throw destinationFailure(
+            `The --to directory ${directory} belongs to a different repository than the session's recorded ${recorded ?? anchor}. Import into a checkout of the same repository.`,
+          );
+        }
       }
       return {
         directory,
