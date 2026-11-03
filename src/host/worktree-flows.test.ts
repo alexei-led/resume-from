@@ -487,7 +487,7 @@ test("Pi command context drives real discovery, preview and native writer instea
         shown.push(...lines);
       },
       async confirm() {
-        expect(shown).toContain(`Destination: ${scene.destinationCwd}`);
+        expect(shown).toContain(`  ${scene.destinationCwd} · no branch`);
         expect(await snapshot(scene.targetHome)).toEqual({});
         confirmed = true;
         return "selected";

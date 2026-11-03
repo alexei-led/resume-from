@@ -16,6 +16,10 @@ adapter is asked to serialize anything.
 
 ## Functional Responsibilities
 
+- Start with the same restore header every other output uses — the `↻ <agent> <id8> · <home> ·
+  <time> · <title>` line and the directory line — then add only what the preview knows: the target
+  agent and home, and the turn counts (FR-17, FR-61). The pipeline renders those two lines with the
+  one summary builder and passes them to `build`; this module does not import another submodule.
 - State how many turns cross over and how many were dropped (FR-17).
 - State the size of the import and the size of the target window (FR-18), in the form
   `Budget: 34k tokens of a 200k window`.
@@ -271,7 +275,7 @@ interface PreviewWarning {
 interface PreviewReport {
   /** Opaque binding that must be returned unchanged to commit this exact preview (FR-20). */
   confirmationToken: string;
-  /** Source, target, and the turn counts that cross and are dropped (FR-17). */
+  /** The shared restore header, then the target and the turn counts that cross and are dropped (FR-17, FR-61). */
   headerLines: string[];
   /** For example "Budget: 34k tokens of a 200k window" (FR-18). */
   budgetLine: string;
@@ -292,7 +296,8 @@ type PreviewContent = Omit<PreviewReport, "confirmationToken">;
 
 /** Builds the preview from a plan and the current repository state. */
 interface PreviewBuilder {
-  build(plan: TransferPlan): Promise<PreviewContent>;
+  /** `summary` is the shared restore header, already rendered by the pipeline. */
+  build(plan: TransferPlan, summary: readonly string[]): Promise<PreviewContent>;
 }
 ```
 
@@ -345,7 +350,13 @@ are.
 
 ## Constraints and Invariants
 
-- **The header shows canonical destination cwd.** The pipeline supplies fresh canonical directory and identity facts for the request. Commit distance receives the native request cwd explicitly; it never uses the directory where a host or reader was constructed.
+- **The first two lines are the shared restore header.** The pipeline renders them with
+  `summaryLines` and passes them to `build`: the source agent, home, time and title, then the
+  canonical destination cwd and its branch. The preview does not restate those facts in later
+  lines.
+- **The header's directory line shows canonical destination cwd.** The pipeline supplies fresh
+  canonical directory and identity facts for the request. Commit distance receives the native
+  request cwd explicitly; it never uses the directory where a host or reader was constructed.
 - **Recorded directory differences are non-blocking `repo-state` warnings.** The pipeline supplies the selected descriptor's `repoPaths` to the builder. Compare filesystem realpaths against canonical destination cwd without new Git lookups or membership inference. Missing (ENOENT) historical candidates are neutral; other operational failures propagate. Empty candidates and identical symlink aliases do not invent a difference. A differing subdirectory qualifies, so wording must not claim a distinct repository or checkout. Emit one warning in both `warnings` and `lines` before confirmation hashing.
 
 - **This module writes nothing** (FR-16). Building a preview has no effect on any home or repository.
@@ -353,8 +364,9 @@ are.
 - **`lines` is the whole preview and the only thing a host displays.** A host that composes its own
   preview from the structured fields breaks FR-21. The structured fields exist for tests and for a
   picker that wants to highlight a warning, not for re-rendering.
-- **The line order is fixed**: the header lines, the budget line, the warnings, the drop lines, and
-  the blocked lines when the import cannot run. `lines` is exactly those, concatenated in that order,
+- **The line order is fixed**: the shared restore header, the target line, the count line, the
+  budget line, the warnings, the drop lines, and the blocked lines when the import cannot run.
+  `lines` is exactly those, concatenated in that order,
   with no separator and nothing else — which is what makes a host that prints `lines` show the whole
   preview and no more.
 - **The repository warning is always first** (FR-19), when there is one.
@@ -380,10 +392,11 @@ because those lines appear in the requirements.
 
 ### Unit Tests
 
-**T-PRE-1 — the header states both turn counts**
+**T-PRE-1 — the header starts with the restore summary and states both turn counts**
 - Scenario: a plan with 34 kept turns and 12 dropped.
-- Expected behavior: the header states both numbers, and they equal `keptTurnCount` and
-  `droppedTurnCount` (FR-17).
+- Expected behavior: the first two lines are the same `↻ <agent> <id8> · <home> · <time> · <title>`
+  and directory lines that native restore prints; the next lines add the target and state both turn
+  counts, equal to `keptTurnCount` and `droppedTurnCount` (FR-17, FR-61).
 
 **T-PRE-2 — the budget line has the required form**
 - Scenario: a plan with 34000 estimated tokens against a 200000-token window.

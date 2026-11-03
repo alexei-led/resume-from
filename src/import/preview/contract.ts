@@ -83,5 +83,6 @@ export type PreviewContent = Omit<PreviewReport, "confirmationToken">;
 
 /** Builds the preview from a plan and the current repository state. */
 export interface PreviewBuilder {
-  build(plan: TransferPlan): Promise<PreviewContent>;
+  /** `summary` is the shared restore header, already rendered by the pipeline. */
+  build(plan: TransferPlan, summary: readonly string[]): Promise<PreviewContent>;
 }

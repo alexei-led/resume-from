@@ -36,6 +36,8 @@ those two points knows either name.
 - Choose the source adapter from the chosen session's agent and the target adapter from the target
   profile's agent — and nothing else in the tree makes that choice.
 - Turn a stage failure into one error that says what failed and what to do next (FR-56).
+- Render the one restore header every output shares, and expose it as `summary` so no host writes
+  its own (FR-61).
 
 ## Subdomain Classification
 
@@ -57,6 +59,9 @@ FR-20; what changes is what the stages return.
   target adapter from `TargetProfile.agent`, and that this is the only place the two are picked.
 - **Error consolidation.** How a discovery failure, a blocked plan, and a landing failure become one
   error shape for every host.
+- **The shared restore header.** `summaryLines` (in the landing submodule) is the single rendering
+  of the `↻ …` header and its directory line; native output, the import preview and the landing
+  marker all use it. The pipeline renders it once and passes the two lines to the preview.
 
 ## Public Contract
 
@@ -614,7 +619,7 @@ interface PreviewWarning {
 interface PreviewReport {
   /** Opaque binding that must be returned unchanged to commit this exact preview (FR-20). */
   confirmationToken: string;
-  /** Source, target, and the turn counts that cross and are dropped (FR-17). */
+  /** The shared restore header, then the target and the turn counts that cross and are dropped (FR-17, FR-61). */
   headerLines: string[];
   /** For example "Budget: 34k tokens of a 200k window" (FR-18). */
   budgetLine: string;
@@ -635,7 +640,8 @@ type PreviewContent = Omit<PreviewReport, "confirmationToken">;
 
 /** Builds the preview from a plan and the current repository state. */
 interface PreviewBuilder {
-  build(plan: TransferPlan): Promise<PreviewContent>;
+  /** `summary` is the shared restore header, already rendered by the pipeline. */
+  build(plan: TransferPlan, summary: readonly string[]): Promise<PreviewContent>;
 }
 ```
 

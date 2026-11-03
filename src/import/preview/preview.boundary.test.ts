@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPreviewBuilder } from "./builder.js";
+import type { TransferPlan } from "./contract.js";
 import {
   HEAD_COMMIT,
   makeDrops,
@@ -11,9 +12,16 @@ import {
   makeTurns,
   SOURCE_COMMIT,
   stubRepo,
+  summaryFor,
 } from "./fixtures.js";
 
 const CWD = "/repo";
+
+/** A builder that receives the shared header the pipeline would hand it. */
+function previewer(...args: Parameters<typeof createPreviewBuilder>) {
+  const builder = createPreviewBuilder(...args);
+  return { build: (plan: TransferPlan) => builder.build(plan, summaryFor(plan)) };
+}
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -59,7 +67,7 @@ describe("boundary", () => {
       droppedTurnCount: 12,
       drops: makeDrops(12, "budget"),
     });
-    const report = await createPreviewBuilder(stubRepo(), repoRoot).build(plan);
+    const report = await previewer(stubRepo(), repoRoot).build(plan);
 
     expect(report.lines.length).toBeGreaterThan(0);
     expect([await checksum(home), await checksum(repoRoot)]).toEqual(before);
@@ -68,7 +76,7 @@ describe("boundary", () => {
   it("T-PRE-14: a moved repository never blocks", async () => {
     for (const ahead of [14, 500]) {
       const repo = stubRepo({ distance: { known: true, ahead, behind: 0 } });
-      const report = await createPreviewBuilder(repo, CWD).build(makePlan());
+      const report = await previewer(repo, CWD).build(makePlan());
 
       expect(report.warnings[0]?.kind).toBe("repo-state");
       expect(report.warnings[0]?.line).toContain(`(${ahead} commits ahead)`);
@@ -79,7 +87,7 @@ describe("boundary", () => {
 
   it("T-PRE-15: an empty plan renders", async () => {
     const plan = makePlan({ turns: [], keptTurnCount: 0, estimatedTokens: 0 });
-    const report = await createPreviewBuilder(stubRepo(), CWD).build(plan);
+    const report = await previewer(stubRepo(), CWD).build(plan);
 
     expect(report.headerLines).toContain("Nothing would cross over");
     expect(report.budgetLine).toBe("Budget: 0 tokens of a 200k window");
@@ -93,7 +101,7 @@ describe("boundary", () => {
       bodiesDropped: 0,
       brokenTailDropped: false,
     });
-    const report = await createPreviewBuilder(stubRepo(), CWD).build(plan);
+    const report = await previewer(stubRepo(), CWD).build(plan);
 
     expect(report.dropLines).toEqual([]);
     expect(report.warnings.map((w) => w.kind)).not.toContain("broken-tail");
@@ -103,7 +111,7 @@ describe("boundary", () => {
 
   it("passes the request cwd and source commit explicitly to distance lookup", async () => {
     const repo = stubRepo();
-    await createPreviewBuilder(repo, CWD).build(makePlan());
+    await previewer(repo, CWD).build(makePlan());
     expect(repo.distanceCalls).toEqual([{ cwd: CWD, sourceCommit: SOURCE_COMMIT }]);
   });
 
@@ -112,7 +120,7 @@ describe("boundary", () => {
     async (lookup) => {
       const failure = new Error("git could not run: spawn EACCES");
       const repo = stubRepo({ [lookup]: failure });
-      await expect(createPreviewBuilder(repo, CWD).build(makePlan())).rejects.toBe(failure);
+      await expect(previewer(repo, CWD).build(makePlan())).rejects.toBe(failure);
     },
   );
 
@@ -120,9 +128,9 @@ describe("boundary", () => {
     "T-PRE-17: %s stops the preview",
     async (message) => {
       const failure = new Error(message);
-      await expect(
-        createPreviewBuilder(stubRepo({ distance: failure }), CWD).build(makePlan()),
-      ).rejects.toBe(failure);
+      await expect(previewer(stubRepo({ distance: failure }), CWD).build(makePlan())).rejects.toBe(
+        failure,
+      );
     },
   );
 
@@ -140,7 +148,7 @@ describe("boundary", () => {
       keptTurnCount: 1,
       title: `Fix the test\n${forgedWarning}\n${forgedBudget}`,
     });
-    const report = await createPreviewBuilder(stubRepo(), CWD).build(plan);
+    const report = await previewer(stubRepo(), CWD).build(plan);
 
     expect(report.budgetLine).toBe("Budget: 34k tokens of a 200k window");
     expect(report.warnings[0]?.line).toBe(
@@ -154,6 +162,6 @@ describe("boundary", () => {
       expect(line).not.toContain("\n");
     }
     expect(report.lines.filter((line) => line.includes("deadbeef"))).toHaveLength(1);
-    expect(report.lines[0]?.startsWith("Source: pi")).toBe(true);
+    expect(report.lines[0]?.startsWith("↻ pi ")).toBe(true);
   });
 });

@@ -12,20 +12,18 @@ import { directoryWarning, planWarnings, repoWarning, sortWarnings } from "./war
 /** Paths are longer than titles and are not shortened to the same length. */
 const MAX_PATH_LENGTH = 160;
 const MAX_REASON_LENGTH = 200;
-const UNTITLED = "(untitled)";
 
 // Each blockedReason now carries its own cause-specific advice (FR-33, FR-56), so no
 // single fallback string is accurate for all block causes.
 
-function headerLines(plan: TransferPlan, canonicalCwd: string): string[] {
-  const source = plan.provenance.ref;
-  const title = oneLine(plan.provenance.title) || UNTITLED;
-  return [
-    `Source: ${source.agent} — ${title} (${oneLine(source.home, MAX_PATH_LENGTH)})`,
-    `Target: ${plan.target.agent} (${oneLine(plan.target.home, MAX_PATH_LENGTH)})`,
-    `Destination: ${oneLine(canonicalCwd, Number.POSITIVE_INFINITY)}`,
-    countLine(plan),
-  ];
+/**
+ * The shared restore header the pipeline renders, then only what the preview adds: the target
+ * and the turn counts. The source agent, home, time, title, destination and branch come from the
+ * one summary builder, so the preview cannot drift from the native and landing summaries.
+ */
+function headerLines(plan: TransferPlan, summary: readonly string[]): string[] {
+  const target = oneLine(plan.target.home, MAX_PATH_LENGTH);
+  return [...summary, `Target: ${plan.target.agent} (${target})`, countLine(plan)];
 }
 
 /** FR-17: both counts, and both come from the plan. */
@@ -70,7 +68,7 @@ export function createPreviewBuilder(
   recordedDirectories: readonly string[] = [],
 ): PreviewBuilder {
   return {
-    async build(plan: TransferPlan): Promise<PreviewContent> {
+    async build(plan: TransferPlan, summary: readonly string[]): Promise<PreviewContent> {
       const collected: PreviewWarning[] = planWarnings(plan);
       const fromDirectory = await directoryWarning(recordedDirectories, canonicalCwd);
       if (fromDirectory !== null) collected.push(fromDirectory);
@@ -78,7 +76,7 @@ export function createPreviewBuilder(
       if (fromRepo !== null) collected.push(fromRepo);
       const warnings = sortWarnings(collected);
 
-      const header = headerLines(plan, canonicalCwd);
+      const header = headerLines(plan, summary);
       const budgetLine = `Budget: ${formatTokens(plan.estimatedTokens)} tokens of a ${formatTokens(plan.target.windowTokens)} window`;
       const drops = dropLines(plan);
       const blocked = plan.blockedReason !== null;

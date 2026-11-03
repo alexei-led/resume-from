@@ -168,7 +168,8 @@ test.each(["claude-code", "codex", "pi"])(
     const before = await snapshot(scene.sourceHome);
     const repositoryBefore = await snapshot(scene.worktree);
     const report = await scene.pipeline.preview(request);
-    expect(report.headerLines).toContain(`Destination: ${scene.destinationCwd}`);
+    // The shared header's directory line carries the canonical destination cwd.
+    expect(report.headerLines[1]).toBe(`  ${scene.destinationCwd} · no branch`);
     expect(report.warnings.map((w) => w.line).join("\n")).toContain("2 commits ahead");
     const landed = await scene.pipeline.commit(request, runtime, report.confirmationToken);
     const adapter = scene.host.registry().get(agent as AgentId);

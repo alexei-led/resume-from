@@ -212,7 +212,7 @@ interface PreviewWarning {
 ```ts
 /** Everything the user sees before confirming (FR-16 to FR-21). */
 interface PreviewReport {
-  /** Source, target, and the turn counts that cross and are dropped (FR-17). */
+  /** The shared restore header, then the target and the turn counts that cross and are dropped (FR-17, FR-61). */
   headerLines: string[];
   /** For example "Budget: 34k tokens of a 200k window" (FR-18). */
   budgetLine: string;

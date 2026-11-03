@@ -233,7 +233,17 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
 
     let report: PreviewContent;
     try {
-      report = await stages.previewFor(destination, descriptor).build(plan);
+      // The preview starts with the same header as every other output. The destination exists
+      // (it was resolved above), so its directory and current branch are the two header facts.
+      const summary = summaryLines(descriptor, {
+        state: "present",
+        directory: destination.canonicalCwd,
+        branch: destination.identity.branch,
+        warnings: [],
+        recovery: null,
+        reason: null,
+      });
+      report = await stages.previewFor(destination, descriptor).build(plan, summary);
       stages.checkCancellation();
     } catch (cause) {
       throw new ImportFailure(

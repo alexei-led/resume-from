@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { createPreviewBuilder } from "./builder.js";
-import { makePlan, stubRepo } from "./fixtures.js";
+import type { TransferPlan } from "./contract.js";
+import { makePlan, stubRepo, summaryFor } from "./fixtures.js";
+
+/** A builder that receives the shared header the pipeline would hand it. */
+function previewer(...args: Parameters<typeof createPreviewBuilder>) {
+  const builder = createPreviewBuilder(...args);
+  return { build: (plan: TransferPlan) => builder.build(plan, summaryFor(plan)) };
+}
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -28,9 +35,7 @@ test.each(["same", "alias", "subdirectory", "mixed", "missing", "empty"] as cons
       missing: [missing, root],
       empty: [],
     }[scenario];
-    const report = await createPreviewBuilder(stubRepo(), root, root, undefined, candidates).build(
-      makePlan(),
-    );
+    const report = await previewer(stubRepo(), root, root, undefined, candidates).build(makePlan());
     const warnings = report.warnings.filter((warning) =>
       warning.line.includes("different directory"),
     );

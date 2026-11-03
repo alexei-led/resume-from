@@ -1,6 +1,8 @@
 // Test fixtures for this module only. Module-local, so they stay out of test/fixtures/
 // (which is for fixtures shared across modules).
 
+import type { SessionDescriptor } from "../../session/contract.js";
+import { summaryLines } from "../landing/summary.js";
 import type {
   AgentId,
   CanonicalTurn,
@@ -76,6 +78,36 @@ export function makePlan(overrides: PlanOverrides = {}): TransferPlan {
   };
 
   return { ...base, ...planFields };
+}
+
+/**
+ * The shared restore header the pipeline hands the builder, rendered from the same plan.
+ * Tests use it so a preview is always built the way a host builds one.
+ */
+export function summaryFor(
+  plan: TransferPlan,
+  directory = "/repo",
+  branch: string | null = null,
+): string[] {
+  const descriptor: SessionDescriptor = {
+    ref: plan.provenance.ref,
+    title: plan.provenance.title,
+    startedAt: plan.provenance.startedAt,
+    updatedAt: plan.provenance.updatedAt,
+    turnCount: plan.keptTurnCount,
+    repoPath: null,
+    repoPaths: [],
+    startDirectory: null,
+    filePath: "",
+  };
+  return summaryLines(descriptor, {
+    state: "present",
+    directory,
+    branch,
+    warnings: [],
+    recovery: null,
+    reason: null,
+  });
 }
 
 export interface StubRepoOptions {

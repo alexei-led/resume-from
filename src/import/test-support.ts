@@ -908,9 +908,9 @@ export function instrument(deps: ImportPipelineDeps): Instrumented {
     previewFor: (destination, descriptor) => {
       const builder = stages.previewFor(destination, descriptor);
       return {
-        build: (plan) => {
+        build: (plan, summary) => {
           order.push("preview.build");
-          return builder.build(plan);
+          return builder.build(plan, summary);
         },
       };
     },
