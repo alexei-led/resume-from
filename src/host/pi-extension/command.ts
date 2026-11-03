@@ -165,35 +165,22 @@ async function importLocated(
   );
   if (destination === null) return;
 
-  const request: ImportRequest = {
-    destinationCwd: destination.directory,
-    target: targetOf(deps, ctx),
-    selection,
-    located: descriptor,
-    onlyAgent: null,
-    onlyHome: null,
-  };
-  const report = await withDiagnostic(deps.ui, "preview", () => pipeline.preview(request));
-  if (report === null) return;
-  deps.ui.show(report.lines); // Verbatim and unreordered (FR-21).
-
-  if (report.blocked) {
-    deps.ui.show([report.blockedReason ?? BLOCKED_FALLBACK]);
-    return; // A blocked preview is never offered for confirmation (FR-33).
-  }
-  if ((await deps.ui.confirm(CONFIRM_QUESTION)) !== "selected") {
-    deps.ui.show([CANCELLED_LINE]);
-    return; // Nothing is written before the user confirms (FR-16, FR-20).
-  }
-  if (destination.warning !== null) deps.ui.show([`⚠ ${destination.warning}`]);
-
-  // Pi's context is the runtime only when the new session lands in the directory Pi is in;
-  // otherwise the import is create-only and the Resume command is shown (FR-61).
-  const runtime = destination.directory === ctx.cwd ? ctx : null;
-  const landing = await withDiagnostic(deps.ui, "import", () =>
-    pipeline.commit(request, runtime, report.confirmationToken),
+  await commitAfterPreview(
+    deps,
+    pipeline,
+    {
+      destinationCwd: destination.directory,
+      target: targetOf(deps, ctx),
+      selection,
+      located: descriptor,
+      onlyAgent: null,
+      onlyHome: null,
+    },
+    // Pi's context is the runtime only when the new session lands in the directory Pi is in;
+    // otherwise the import is create-only and the Resume command is shown (FR-61).
+    destination.directory === ctx.cwd ? ctx : null,
+    destination.warning,
   );
-  if (landing !== null && !landing.switched) present(deps.ui, landing);
 }
 
 /** The existing no-argument flow: list, pick, preview and import into this directory. */
@@ -204,13 +191,30 @@ async function importSelection(
   scope: ListRequest,
   selection: SelectionInput,
 ): Promise<void> {
-  const request: ImportRequest = {
-    destinationCwd: scope.destinationCwd,
-    target: targetOf(deps, ctx),
-    selection,
-    onlyAgent: scope.onlyAgent,
-    onlyHome: scope.onlyHome,
-  };
+  await commitAfterPreview(
+    deps,
+    pipeline,
+    {
+      destinationCwd: scope.destinationCwd,
+      target: targetOf(deps, ctx),
+      selection,
+      onlyAgent: scope.onlyAgent,
+      onlyHome: scope.onlyHome,
+    },
+    // Pi's own context is the runtime handle the Pi adapter switches with (FR-44).
+    ctx,
+    null,
+  );
+}
+
+/** One preview, blocking check, confirmation and commit for every Pi import (FR-16, FR-33). */
+async function commitAfterPreview(
+  deps: ResumeFromDeps,
+  pipeline: ImportPipeline,
+  request: ImportRequest,
+  runtime: PiCommandContext | null,
+  warning: string | null,
+): Promise<void> {
   const report = await withDiagnostic(deps.ui, "preview", () => pipeline.preview(request));
   if (report === null) return;
   deps.ui.show(report.lines); // Verbatim and unreordered (FR-21).
@@ -219,15 +223,14 @@ async function importSelection(
     deps.ui.show([report.blockedReason ?? BLOCKED_FALLBACK]);
     return; // A blocked preview is never offered for confirmation (FR-33).
   }
-
   if ((await deps.ui.confirm(CONFIRM_QUESTION)) !== "selected") {
     deps.ui.show([CANCELLED_LINE]);
     return; // Nothing is written before the user confirms (FR-16, FR-20).
   }
+  if (warning !== null) deps.ui.show([`⚠ ${warning}`]);
 
-  // Pi's own context is the runtime handle the Pi adapter switches with (FR-44).
   const landing = await withDiagnostic(deps.ui, "import", () =>
-    pipeline.commit(request, ctx, report.confirmationToken),
+    pipeline.commit(request, runtime, report.confirmationToken),
   );
   if (landing !== null && !landing.switched) present(deps.ui, landing);
 }
