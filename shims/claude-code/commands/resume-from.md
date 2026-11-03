@@ -12,7 +12,9 @@ Split them into a selector — the first token that is an ID, ID prefix, file pa
 
 Run the command once, passing any instructions as `--prompt "<instructions>"`, and pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code -- <selector> --prompt "<instructions>"
+    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code --target-home "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" -- <selector> --prompt "<instructions>"
+
+The active Claude profile is the target, even when the source is another Claude profile. Never switch to the source profile instead of importing into the target.
 
 If the output contains `Confirm:` and the user did not ask for a preview or dry run, do not paste that line into a shell. Re-run the SAME command above, adding the `--confirm <token>` arguments it shows (the token is the part after `--confirm`). Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 
@@ -20,8 +22,8 @@ If the instructions ask for a new or different worktree or directory, do this on
 
 If the command exits non-zero, or its output has no `Confirm:`, `Resume:` or `Switched.`, show its output verbatim and stop. It names the next step: matching candidates, an unrecoverable directory with `--to`, an invalid flag, or nothing found.
 
-When the output contains `Resume:`, that command is already shell-quoted and already carries the instructions. Do not re-run the tool to add them: after a cross-agent landing the selector still names the source session, so a re-run would preview a second import. Try to run the command for the user:
-- inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH): put the command in a variable with a quoted heredoc, then `agtermctl session new --cwd <dir> --command "$cmd" --name <short-name>`
+When the output contains `Resume:`, that command is already shell-quoted and already carries the instructions. If the active profile was launched with a custom wrapper or extra `--settings` that the command does not preserve, show the `Resume:` line for use with that same launcher instead of starting a bare `claude`. Do not re-run the tool to add them: after a cross-agent landing the selector still names the source session, so a re-run would preview a second import. Try to run the command for the user:
+- inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH): put the command in `cmd` with a quoted heredoc. POSIX-single-quote the whole value as ONE argument to `/bin/zsh -lc` (escape each single quote as `'"'"'`) and put that shell command in `launch`. Run `agtermctl session new --socket "$AGTERM_SOCKET" --cwd <dir> --command "$launch" --wait --name <short-name>`. Never pass raw `cd … && …` as `--command`: agterm executes argv, not shell syntax. Check the new session's foreground process and output before reporting success.
 - else inside tmux (`$TMUX` set): put the command in a variable with a quoted heredoc, then `tmux new-window -c <dir> "$cmd"`
 - else show the `Resume:` line. If the user gave instructions, run the tool again with `--context`, read it, `cd` to the printed `Directory:`, and carry out the instructions in this session.
 

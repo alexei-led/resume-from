@@ -47,7 +47,7 @@ The tool prints a two-line summary, any warnings, and then:
 - `Resume:` — run this when the agent is the same. Nothing was written.
 - `Confirm:` — re-run this exact command to import, or to run a shown worktree recovery.
 
-Same agent: run `Resume:`. Another agent: confirm the import; the new native session starts with the
+Same agent and profile home in a CLI plugin: run `Resume:`. Another agent or profile home: confirm the import; the new native session starts with the
 three-line recovery summary.
 
 ## 3. Options

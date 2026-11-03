@@ -180,6 +180,11 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
       },
       pipeline,
     );
+  const runInSource = (args: string[]) =>
+    createCliRunner({ ...target, home: sourceHome }).run(
+      { cwd: destinationCwd, argv: args, targetAgent: agent, targetHome: sourceHome },
+      pipeline,
+    );
   return {
     root,
     main,
@@ -196,6 +201,7 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
     file,
     transcript,
     run,
+    runInSource,
   };
 }
 
@@ -272,21 +278,62 @@ test("the bare-shell entry point restores a session natively and writes nothing"
   const shown = outcome.stdout.join("\n");
   expect(shown).toContain("↻ claude-code");
   expect(shown).toContain("Resume: cd ");
-  expect(shown).toContain(` && claude --resume ${scene.id}`);
+  expect(shown).toContain(
+    ` && CLAUDE_CONFIG_DIR='${scene.sourceHome}' claude --resume ${scene.id}`,
+  );
   expect(await snapshot(scene.targetHome)).toEqual({});
 });
 
-test("CLI restores a same-agent session natively and writes nothing", async () => {
+test("CLI restores a same-profile session natively and writes nothing", async () => {
   const scene = await bench("sibling-to-external");
   const unchanged = await unchangedAfter(scene);
-  const outcome = await scene.run([scene.id]);
+  const outcome = await scene.runInSource([scene.id]);
   expect(outcome.exitCode).toBe(0);
   expect(outcome.stderr).toEqual([]);
   const shown = outcome.stdout.join("\n");
   expect(shown).toContain("Resume: cd ");
-  expect(shown).toContain(` && claude --resume ${scene.id}`);
+  expect(shown).toContain(
+    ` && CLAUDE_CONFIG_DIR='${scene.sourceHome}' claude --resume ${scene.id}`,
+  );
   expect(shown).toContain("↻ claude-code");
   expect(await snapshot(scene.targetHome)).toEqual({});
+  await unchanged();
+});
+
+test("CLI imports an ID from another Claude profile into the active profile", async () => {
+  const scene = await bench("sibling-to-external");
+  const unchanged = await unchangedAfter(scene);
+  process.env.CLAUDE_CONFIG_DIR = scene.targetHome;
+
+  const invoke = (argv: string[]) =>
+    runCommandBinary(
+      { argv, cwd: scene.destinationCwd, targetAgent: "claude-code", targetHome: null },
+      {
+        configLoader: {
+          load: async () =>
+            testConfig({ extraHomes: [{ agent: "claude-code", home: scene.sourceHome }] }),
+        },
+      },
+    );
+
+  const preview = await invoke([scene.id]);
+  expect(preview.exitCode).toBe(0);
+  expect(preview.stderr).toEqual([]);
+  expect(preview.stdout.join("\n")).toContain(`Target: claude-code (${scene.targetHome})`);
+  expect(await snapshot(scene.targetHome)).toEqual({});
+  const token = preview.stdout.join("\n").match(/v1-sha256-[0-9a-f]{64}/)?.[0];
+  expect(token).toBeDefined();
+  if (token === undefined) throw new Error("CLI did not offer an import confirmation");
+
+  const imported = await invoke([scene.id, "--confirm", token]);
+  expect(imported.exitCode).toBe(0);
+  expect(imported.stderr).toEqual([]);
+  await readNativeImport(scene, "claude-code", scene.sourceCwd);
+  const [landed] = await scene.host.registry().get("claude-code").listSessions(scene.targetHome);
+  expect(landed?.ref.id).not.toBe(scene.id);
+  expect(imported.stdout.join("\n")).toContain(
+    `CLAUDE_CONFIG_DIR='${scene.targetHome}' claude --resume ${landed?.ref.id}`,
+  );
   await unchanged();
 });
 
@@ -383,13 +430,15 @@ test("CLI resumes natively from a session whose last line was cut mid-write", as
   // A crashed agent leaves a complete conversation with an incomplete trailing entry.
   await cutLastLine(scene.file);
 
-  const outcome = await scene.run([scene.id]);
+  const outcome = await scene.runInSource([scene.id]);
 
   expect(outcome.exitCode).toBe(0);
   expect(outcome.stderr).toEqual([]);
   const shown = outcome.stdout.join("\n");
   expect(shown).toContain("Resume: cd ");
-  expect(shown).toContain(` && claude --resume ${scene.id}`);
+  expect(shown).toContain(
+    ` && CLAUDE_CONFIG_DIR='${scene.sourceHome}' claude --resume ${scene.id}`,
+  );
 });
 
 test("CLI plans the removal recovery of a session whose last line was cut mid-write", async () => {
@@ -451,7 +500,7 @@ test("CLI recovers a removed worktree behind a token, then resumes natively", as
   await scene.transcript([scene.linked, scene.linked]);
   git(scene.main, "worktree", "remove", "--force", scene.linked);
 
-  const preview = await scene.run([scene.id]);
+  const preview = await scene.runInSource([scene.id]);
   expect(preview.exitCode).toBe(0);
   const shown = preview.stdout.join("\n");
   expect(shown).toContain("Recover:");
@@ -461,15 +510,17 @@ test("CLI recovers a removed worktree behind a token, then resumes natively", as
 
   // A wrong token runs nothing and leaves the directory missing.
   const wrong = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
-  const refused = await scene.run([scene.id, "--confirm", wrong]);
+  const refused = await scene.runInSource([scene.id, "--confirm", wrong]);
   expect(refused.exitCode).toBe(2);
   expect(await snapshot(scene.linked)).toEqual({});
 
-  const recovered = await scene.run([scene.id, "--confirm", token]);
+  const recovered = await scene.runInSource([scene.id, "--confirm", token]);
   expect(recovered.exitCode).toBe(0);
   expect(recovered.stderr).toEqual([]);
   expect(recovered.stdout.join("\n")).toContain("Resume: cd ");
-  expect(recovered.stdout.join("\n")).toContain(` && claude --resume ${scene.id}`);
+  expect(recovered.stdout.join("\n")).toContain(
+    ` && CLAUDE_CONFIG_DIR='${scene.sourceHome}' claude --resume ${scene.id}`,
+  );
   expect(await snapshot(scene.linked)).not.toEqual({});
 });
 

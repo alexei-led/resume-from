@@ -288,6 +288,23 @@ describe("resumeCommand renders a native, safely quoted command", () => {
     );
   });
 
+  it("keeps the active Claude profile explicit when the command opens another terminal", () => {
+    const home = "/profiles/.claude-team";
+    const adapter = createClaudeCodeAdapter({
+      env: { CLAUDE_CONFIG_DIR: home },
+      homeDir: HOME_HINT,
+    });
+    expect(
+      adapter.resumeCommand({
+        home,
+        directory: "/work/app",
+        sessionId: "id-1",
+        filePath: "/x/id-1.jsonl",
+        prompt: null,
+      }),
+    ).toBe("cd /work/app && CLAUDE_CONFIG_DIR=/profiles/.claude-team claude --resume id-1");
+  });
+
   it("adds CODEX_HOME only for a non-default Codex home", () => {
     const adapter = codexAdapterFactory.create();
     expect(

@@ -89,13 +89,35 @@ describe("T-CLI-25 the identifier flow", () => {
       place: presentPlace({ directory: "/work/app", branch: "main" }),
     });
 
-    const outcome = await createCliRunner().run(invocation({ argv: [located.ref.id] }), pipeline);
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id], targetHome: located.ref.home }),
+      pipeline,
+    );
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.stdout.join("\n")).toContain("Resume: cd /work/app && claude-code resume");
     expect(calls.preview).toHaveLength(0);
     expect(calls.commit).toHaveLength(0);
   });
+
+  it.each(["claude-code", "codex"] as const)(
+    "previews another %s profile instead of resuming the source",
+    async (agent) => {
+      const located = descriptor({
+        ref: { agent, home: "/profiles/personal", id: "source-session" },
+      });
+      const { pipeline, calls } = stubPipeline({ located });
+      const outcome = await createCliRunner().run(
+        invocation({ argv: [located.ref.id], targetAgent: agent, targetHome: "/profiles/work" }),
+        pipeline,
+      );
+      expect(outcome.exitCode).toBe(0);
+      expect(outcome.stdout.join("\n")).toContain("Confirm:");
+      expect(outcome.stdout.join("\n")).not.toContain("Resume:");
+      expect(calls.preview[0]?.target.home).toBe("/profiles/work");
+      expect(calls.commit).toHaveLength(0);
+    },
+  );
 
   it("never imports in a bare shell, even when the agent differs", async () => {
     const located = descriptor({
@@ -180,7 +202,10 @@ describe("T-CLI-25 the identifier flow", () => {
     });
 
     const outcome = await createCliRunner().run(
-      invocation({ argv: [located.ref.id, "--prompt", "continue the refactor"] }),
+      invocation({
+        argv: [located.ref.id, "--prompt", "continue the refactor"],
+        targetHome: located.ref.home,
+      }),
       pipeline,
     );
 

@@ -37,6 +37,19 @@ test("the Claude command allows the tools the steps need", async () => {
   }
 });
 
+test("the Claude command preserves the target profile and wraps agterm shell syntax", async () => {
+  const text = await readFile(
+    new URL("../../../shims/claude-code/commands/resume-from.md", import.meta.url),
+    "utf8",
+  );
+  expect(text).toContain("--target-home");
+  expect(text).toContain("CLAUDE_CONFIG_DIR:-$HOME/.claude");
+  expect(text).toContain("/bin/zsh -lc");
+  expect(text).toContain('--command "$launch" --wait');
+  expect(text).toContain("before reporting success");
+  expect(text).toContain("that same launcher instead of starting a bare");
+});
+
 test("the Codex prompt keeps the pinned package prefix", async () => {
   const text = await readFile(
     new URL("../../../shims/codex/prompts/resume-from.md", import.meta.url),
