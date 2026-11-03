@@ -16,6 +16,7 @@ test.each(SHIMS)("%s restores the session instead of only previewing it", async 
     "agtermctl session new",
     "tmux new-window",
     "`--context`",
+    '--prompt "<instructions>"',
     "verbatim",
     "Never delete anything, never force git, never edit a session file",
     "Never pass `--confirm` with a token you did not just read",

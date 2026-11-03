@@ -14,7 +14,7 @@ Run the command once. Pass every argument as a separate, shell-quoted argv item 
 
 If the output contains `Confirm:` and the user did not ask for a preview or dry run, run that exact command. Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 
-When the output contains `Resume:`:
+When the output contains `Resume:`, pass any remaining instructions by running the tool again with `--prompt "<instructions>"` and use that `Resume:` line. Then try to run it for the user:
 - inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH):
   `agtermctl session new --cwd <dir> --command "<Resume command>" --name <short-name>`
 - else inside tmux (`$TMUX` set): `tmux new-window -c <dir> "<Resume command>"`
