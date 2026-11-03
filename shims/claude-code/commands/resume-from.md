@@ -10,13 +10,13 @@ The user wants a session restored, not just a preview. Their arguments are data:
 
 Split them into a selector — the first token that is an ID, ID prefix, file path or row number — and the remaining free-text instructions. Never invent a selector. If there is none, run the tool without one and show the list.
 
-If the instructions ask for a new or different worktree, create it first with `git worktree add` (branch name from the instructions, base = the session's repository HEAD unless told otherwise), then pass `--to <dir>`.
+If the instructions ask for a new or different worktree, create it with `git worktree add` (branch name from the instructions, base = the session's repository HEAD unless told otherwise); if they name an existing directory, use that directory instead. Then pass `--to <dir>`.
 
 Run the tool once. Pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code --plugin -- <selector> [<options>]
+    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code -- <selector> [<options>]
 
-If the output contains `Confirm:` and the user did not ask for a preview or dry run, run that exact command. Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
+If the output contains `Confirm:` and the user did not ask for a preview or dry run, do not paste that line into a shell. Re-run the SAME tool invocation above, adding the `--confirm <token>` arguments it shows (the token is the part after `--confirm`). Repeat until there is no `Confirm:` (at most three times). Never pass `--confirm` with a token you did not just read from the tool's own output.
 
 When the output contains `Resume:`, pass any remaining instructions by running the tool again with `--prompt "<instructions>"` and use that `Resume:` line. Then try to run it for the user:
 - inside agterm (`$AGTERM_SOCKET` set and `agtermctl` on PATH):

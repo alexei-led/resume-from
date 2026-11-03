@@ -42,13 +42,18 @@ test("the Codex prompt keeps the pinned package prefix", async () => {
     new URL("../../../shims/codex/prompts/resume-from.md", import.meta.url),
     "utf8",
   );
-  expect(text).toContain(
-    "npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --plugin --",
-  );
+  expect(text).toContain("npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --");
 });
 
-test.each(SHIMS)("%s tells the tool it runs inside an installed host command", async (path) => {
+test.each(SHIMS)("%s offers an existing directory as well as a new worktree", async (path) => {
   const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
-  expect(text).toContain("--target-agent");
-  expect(text).toContain("--plugin --");
+  expect(text).toContain("git worktree add");
+  expect(text).toContain("if they name an existing directory, use that directory");
+});
+
+test.each(SHIMS)("%s makes Confirm a re-run of the same invocation", async (path) => {
+  const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
+  expect(text).toContain("Re-run the SAME");
+  expect(text).toContain("do not paste that line into a shell");
+  expect(text).toContain("--confirm <token>");
 });

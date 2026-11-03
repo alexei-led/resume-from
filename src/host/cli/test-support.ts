@@ -106,7 +106,6 @@ export function invocation(overrides: Partial<CliInvocation> = {}): CliInvocatio
     cwd: REPO_ROOT,
     targetAgent: "claude-code",
     targetHome: null,
-    plugin: true,
     ...overrides,
   };
 }
@@ -137,6 +136,9 @@ export interface StubOptions {
   locateRejects?: unknown;
   previewRejects?: unknown;
   commitRejects?: unknown;
+  /** The token a recoverable place is bound to; null means no plan. */
+  recoveryToken?: string | null;
+  destinationRejects?: unknown;
 }
 
 export function presentPlace(overrides: Partial<Place> = {}): Place {
@@ -195,7 +197,7 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
       ];
     },
     recoveryToken() {
-      return null;
+      return options.recoveryToken ?? null;
     },
     async recover(): Promise<RecoveryResult> {
       calls.order.push("recover");
@@ -206,6 +208,8 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
       };
     },
     async destinationFor(_descriptor, to): Promise<ImportDestination> {
+      if (options.destinationRejects !== undefined)
+        return Promise.reject(options.destinationRejects);
       return (
         options.destination ?? {
           directory: to ?? located.startDirectory ?? located.repoPath ?? REPO_ROOT,

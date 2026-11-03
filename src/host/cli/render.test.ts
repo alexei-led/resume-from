@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import type { Place } from "./contract.js";
 import { renderListing, renderNative, renderRecovery } from "./render.js";
+import { descriptor } from "./test-support.js";
 
 it("labels skipped sessions and homes as entries, not unreadable homes", () => {
   const listing = {
@@ -22,6 +23,17 @@ it("labels skipped sessions and homes as entries, not unreadable homes", () => {
       "/destination",
     ),
   ).toContain("2 entries skipped:");
+});
+
+it("names the command that exists in a bare shell, and the slash command in an agent", () => {
+  const rows = { rows: [descriptor()], failures: [] };
+
+  const shell = renderListing(rows, "/destination", true).join("\n");
+  expect(shell).toContain('Run "resume-from <n>" to restore a session.');
+  expect(shell).not.toContain("/resume-from");
+
+  const agent = renderListing(rows, "/destination").join("\n");
+  expect(agent).toContain('Run "/resume-from <n>" to preview a session.');
 });
 
 const ESCAPE = "\u001b[31m";

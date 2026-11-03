@@ -165,7 +165,7 @@ describe("T-HOS-10 — the entry point follows the declared selection level", ()
     ["a fake fourth agent", FIXTURE_AGENT_ID],
   ])("%s runs the command binary", async (_name, agent) => {
     const outcome = await runCommandBinary(
-      { argv: [], cwd: "/tmp", targetAgent: agent, targetHome: null, plugin: true },
+      { argv: [], cwd: "/tmp", targetAgent: agent, targetHome: null },
       { agents: entries, configLoader: fixedConfig() },
     );
     expect(outcome.exitCode).toBe(0);
@@ -173,7 +173,7 @@ describe("T-HOS-10 — the entry point follows the declared selection level", ()
 
   it("the picker agent is refused by the command binary", async () => {
     const outcome = await runCommandBinary(
-      { argv: [], cwd: "/tmp", targetAgent: PI, targetHome: null, plugin: true },
+      { argv: [], cwd: "/tmp", targetAgent: PI, targetHome: null },
       { agents: entries, configLoader: fixedConfig() },
     );
     expect(outcome.exitCode).toBe(2);

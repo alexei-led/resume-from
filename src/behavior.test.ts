@@ -557,7 +557,6 @@ describe("T-ROO-21 — nothing is written before confirmation, anywhere", () => 
             cwd: REPO_ROOT,
             targetAgent: adapter.agent,
             targetHome: home,
-            plugin: true,
           },
           { cwd: REPO_ROOT },
         );

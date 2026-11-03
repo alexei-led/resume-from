@@ -5,8 +5,7 @@ import { homedir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import type { AgentId, HomePath, SelectionInput } from "./contract.js";
 
-export const USAGE =
-  "Usage: /resume-from <id-or-prefix> [options]   (inside an agent: /resume-from <row> | <id-or-prefix> | <file-path>)";
+export const USAGE = "Usage: resume-from <id-or-prefix> [options]";
 
 /** The agent names the user may type, and the agent they mean (FR-15). */
 const AGENT_NAMES: Record<string, AgentId> = {

@@ -507,8 +507,10 @@ agent's home variable only when the home is not that agent's default.
 **FR-65** — A bare shell (no `--target-agent`) and a plugin whose source agent equals the target
 without `--to` print the source agent's native resume command and write nothing. A different agent,
 or `--to <dir>`, imports with the destination at the session's recorded directory or the override.
-`--to` must name an existing checkout of the same repository while the recorded directory exists;
-when that directory is missing and unrecoverable, any existing checkout is allowed with a warning.
+`--to` must name an existing checkout of the same repository while the recorded directory exists,
+and, when that directory is missing but recoverable, of the repository that would recreate it; the
+check happens before any recovery writes. When the recorded directory is missing and unrecoverable,
+any existing checkout is allowed with a warning.
 `--prompt <text>` appends the text, shell-quoted, as the initial prompt of the native resume command.
 `--context` is read-only: it prints the summary and the budgeted conversation an import into the
 current agent would keep, then a final `Directory: <dir>` line. Pi switches in process to the
@@ -522,9 +524,8 @@ where it came from, where it now lives, and the kept and dropped counts. Claude 
 summary in one `system` entry (subtype `informational`, level `info`, `isMeta` false), rendered gray;
 Pi stores one `custom` entry rendered dim, with the collapsed view showing its first line; Codex
 prints it. Imported Claude Code assistant turns declare the model `<synthetic>` so a resume shows no
-restore notice. A `Confirm:` re-run uses the host's `/resume-from` in plugin mode and a runnable
-`resume-from …` shell command otherwise; a manual shell invocation that passed `--target-agent`
-repeats that flag and its `--` delimiter. Displayed text is sanitised.
+restore notice. A `Confirm:` re-run uses the host's `/resume-from` whenever a target agent is stated, and a
+runnable `resume-from …` shell command in a bare shell. Displayed text is sanitised.
 
 ---
 

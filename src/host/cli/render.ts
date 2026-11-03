@@ -46,7 +46,12 @@ export function renderPreview(report: readonly string[], confirmCommand: string)
   return [...report.map(safeText), "", `Confirm: ${confirmCommand}`];
 }
 
-export function renderListing(listing: Listing, destinationCwd: string): string[] {
+/** `bareShell` decides the command that actually exists: a row prints a native command there. */
+export function renderListing(
+  listing: Listing,
+  destinationCwd: string,
+  bareShell = false,
+): string[] {
   const lines: string[] =
     listing.rows.length === 0
       ? [`No session of ${safeText(destinationCwd)} was found.`]
@@ -64,7 +69,12 @@ export function renderListing(listing: Listing, destinationCwd: string): string[
   }
 
   if (listing.rows.length > 0) {
-    lines.push("", 'Run "/resume-from <n>" to preview a session.');
+    lines.push(
+      "",
+      bareShell
+        ? 'Run "resume-from <n>" to restore a session.'
+        : 'Run "/resume-from <n>" to preview a session.',
+    );
   }
   return lines;
 }

@@ -86,11 +86,15 @@ async function run(
     };
     try {
       const listing = await pipeline.list(request);
-      return { stdout: renderListing(listing, invocation.cwd), stderr: [], exitCode: 0 };
+      return {
+        stdout: renderListing(listing, invocation.cwd, target === null),
+        stderr: [],
+        exitCode: 0,
+      };
     } catch (error) {
       return failure(
         `The listing failed: ${messageOf(error)}`,
-        "Fix that, then run /resume-from again.",
+        `Fix that, then run ${renderCommand(invocation, [])} again.`,
       );
     }
   }
@@ -180,6 +184,23 @@ async function restoreFlow(
     }
   }
 
+  // --to is validated before any recovery: a recovery writes a worktree, and a destination in
+  // another repository must be refused before that write (revised NG-9). When the recorded
+  // directory is missing and recoverable, `place` lets the pipeline compare the destination
+  // with the repository the worktree would belong to.
+  let destination: { directory: string; warning: string | null } | null = null;
+  if (request.to !== null) {
+    try {
+      destination = await pipeline.destinationFor(descriptor, request.to, place);
+    } catch (error) {
+      return failure(messageOf(error));
+    }
+  }
+  const destinationLines =
+    destination === null || destination.warning === null
+      ? []
+      : renderWarnings([destination.warning]);
+
   // A directory that cannot be recovered blocks a restore, unless --to names another
   // checkout: importing there is allowed, with the warning destinationFor adds (FR-61).
   if (place.state === "unrecoverable" && request.to === null) {
@@ -189,7 +210,7 @@ async function restoreFlow(
         ...renderWarnings(place.warnings),
         ...(place.reason === null ? [] : [`⚠ ${safeText(place.reason)}`]),
       ],
-      stderr: [`The directory of session ${descriptor.ref.id} cannot be recovered.`],
+      stderr: ["Recreate the session's directory, then run the command again."],
       exitCode: 1,
     };
   }
@@ -202,11 +223,18 @@ async function restoreFlow(
     }
     if (request.confirmationToken === null) {
       return {
-        stdout: renderRecovery(
-          pipeline.summary(descriptor, place),
-          place,
-          renderCommand(invocation, [...withoutConfirmation(invocation.argv), CONFIRM_FLAG, token]),
-        ),
+        stdout: [
+          ...destinationLines,
+          ...renderRecovery(
+            pipeline.summary(descriptor, place),
+            place,
+            renderCommand(invocation, [
+              ...withoutConfirmation(invocation.argv),
+              CONFIRM_FLAG,
+              token,
+            ]),
+          ),
+        ],
         stderr: [],
         exitCode: 0,
       };
@@ -251,11 +279,12 @@ async function restoreFlow(
     }
   }
 
-  let destination: { directory: string; warning: string | null };
-  try {
-    destination = await pipeline.destinationFor(descriptor, request.to);
-  } catch (error) {
-    return failure(messageOf(error), "Name an existing checkout of the same repository.");
+  if (destination === null) {
+    try {
+      destination = await pipeline.destinationFor(descriptor, null, place);
+    } catch (error) {
+      return failure(messageOf(error));
+    }
   }
 
   const importRequest: ImportRequest = {
@@ -267,8 +296,6 @@ async function restoreFlow(
     onlyAgent: request.onlyAgent,
     onlyHome: request.onlyHome,
   };
-  const destinationLines =
-    destination.warning === null ? [] : renderWarnings([destination.warning]);
   // A token used for this invocation's recovery does not confirm the import preview that
   // follows it, so the preview and its own Confirm line are shown (FR-61).
   return await importFlow(invocation, pipeline, importRequest, {
@@ -355,16 +382,12 @@ function withoutConfirmation(argv: string[]): string[] {
 }
 
 function renderCommand(invocation: CliInvocation, argv: string[]): string {
-  // A plugin re-run is the host's own command; a manual shell invocation must stay runnable
-  // there, which means repeating the shim flags the person wrote (FR-66).
-  if (invocation.plugin) return ["/resume-from", ...argv].map(quoteArgument).join(" ");
-  const shim: string[] = [];
+  // A target agent is only stated by an installed agent command, so the re-run is that
+  // host's own `/resume-from`. A bare shell repeats its flags so the line stays runnable (FR-66).
   if (invocation.targetAgent !== null) {
-    shim.push("--target-agent", invocation.targetAgent);
-    if (invocation.targetHome !== null) shim.push("--target-home", invocation.targetHome);
+    return ["/resume-from", ...argv].map(quoteArgument).join(" ");
   }
-  const separator = shim.length > 0 ? ["--"] : [];
-  return ["resume-from", ...shim, ...separator, ...argv].map(quoteArgument).join(" ");
+  return ["resume-from", ...argv].map(quoteArgument).join(" ");
 }
 
 function quoteArgument(argument: string): string {

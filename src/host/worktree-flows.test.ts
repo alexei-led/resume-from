@@ -6,6 +6,7 @@ import { dirname, join, relative } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { createCliRunner } from "./cli/index.js";
 import type { AgentId } from "./contract.js";
+import { runCommandBinary } from "./index.js";
 import { createResumeFromCommand } from "./pi-extension/command.js";
 import type { PiCommandContext } from "./pi-extension/contract.js";
 import { type EnvGuard, testConfig, withHomes } from "./test-support.js";
@@ -176,7 +177,6 @@ async function bench(direction: Direction, agent: AgentId = "claude-code") {
         argv: ["claude", "--home", sourceHome, ...args],
         targetAgent: agent,
         targetHome,
-        plugin: true,
       },
       pipeline,
     );
@@ -254,6 +254,28 @@ test.each([["main-to-nested"], ["sibling-to-main"], ["sibling-to-external"]] as 
   },
 );
 
+test("the bare-shell entry point restores a session natively and writes nothing", async () => {
+  const scene = await bench("sibling-to-external");
+  const outcome = await runCommandBinary(
+    { argv: [scene.id], cwd: scene.destinationCwd, targetAgent: null, targetHome: null },
+    {
+      cwd: scene.destinationCwd,
+      configLoader: {
+        load: async () =>
+          testConfig({ extraHomes: [{ agent: "claude-code", home: scene.sourceHome }] }),
+      },
+    },
+  );
+
+  expect(outcome.exitCode).toBe(0);
+  expect(outcome.stderr).toEqual([]);
+  const shown = outcome.stdout.join("\n");
+  expect(shown).toContain("↻ claude-code");
+  expect(shown).toContain("Resume: cd ");
+  expect(shown).toContain(` && claude --resume ${scene.id}`);
+  expect(await snapshot(scene.targetHome)).toEqual({});
+});
+
 test("CLI restores a same-agent session natively and writes nothing", async () => {
   const scene = await bench("sibling-to-external");
   const unchanged = await unchangedAfter(scene);
@@ -280,6 +302,22 @@ test("CLI imports a cross-agent session into the session directory, not the invo
   await unchanged();
 });
 
+test("CLI --context prints the conversation and its directory, and writes nothing", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  const unchanged = await unchangedAfter(scene);
+
+  const outcome = await scene.run([scene.id, "--context"]);
+
+  expect(outcome.exitCode).toBe(0);
+  expect(outcome.stderr).toEqual([]);
+  const shown = outcome.stdout.join("\n");
+  expect(shown).toContain("User: Inspect the tracked file without changing it.");
+  expect(shown).toContain("Agent: The tracked file is ready for inspection.");
+  expect(shown).toContain(`Directory: ${scene.sourceCwd}`);
+  expect(await snapshot(scene.targetHome)).toEqual({});
+  await unchanged();
+});
+
 test("CLI --to imports into another checkout of the same repository", async () => {
   const scene = await bench("sibling-to-external", "codex");
   const token = await previewToken(scene, [scene.id, "--to", scene.destinationCwd]);
@@ -295,6 +333,22 @@ test("CLI refuses --to into a different repository and writes nothing", async ()
   const refused = await scene.run([scene.id, "--to", other]);
   expect(refused.exitCode).toBe(2);
   expect(refused.stderr.join("\n")).toContain("different repository");
+  expect(await snapshot(scene.targetHome)).toEqual({});
+});
+
+test("CLI refuses --to into a different repository before recreating a worktree", async () => {
+  const scene = await bench("main-to-nested", "codex");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+  const other = await temporaryRoot("other-repository");
+  git(other, "init", "-b", "main");
+
+  const refused = await scene.run([scene.id, "--to", other]);
+
+  expect(refused.exitCode).toBe(2);
+  expect(refused.stderr.join("\n")).toContain("different repository");
+  // The recovery was never offered or run: the removed worktree is still absent.
+  expect(await snapshot(scene.linked)).toEqual({});
   expect(await snapshot(scene.targetHome)).toEqual({});
 });
 

@@ -257,6 +257,70 @@ describe("T-CLI-25 the identifier flow", () => {
     expect(calls.preview[0]?.located).toEqual(located);
   });
 
+  it("validates --to before offering a recovery, so no worktree is written first", async () => {
+    const located = descriptor({ startDirectory: "/gone/app", repoPath: "/gone/app" });
+    const { pipeline, calls } = stubPipeline({
+      located,
+      place: {
+        state: "recoverable",
+        directory: "/gone/app",
+        branch: "main",
+        warnings: [],
+        recovery: { directory: "/gone/app", commands: [], warnings: [] },
+        reason: null,
+      },
+      recoveryToken: `v1-sha256-${"2".repeat(64)}`,
+      destinationRejects: new Error("belongs to a different repository"),
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--to", "/work/other"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(2);
+    expect(outcome.stderr.join("\n")).toContain("different repository");
+    expect(calls.order).not.toContain("recover");
+  });
+
+  it("shows the destination warning in the recovery preview", async () => {
+    const located = descriptor({ startDirectory: "/gone/app", repoPath: "/gone/app" });
+    const warning =
+      "the session's recorded directory /gone/app is missing; importing into /work/other anyway";
+    const { pipeline } = stubPipeline({
+      located,
+      place: {
+        state: "recoverable",
+        directory: "/gone/app",
+        branch: "main",
+        warnings: [],
+        recovery: {
+          directory: "/gone/app",
+          commands: [
+            {
+              cwd: "/work/app",
+              argv: ["worktree", "add", "/gone/app", "main"],
+              display: "git -C /work/app worktree add /gone/app main",
+            },
+          ],
+          warnings: [],
+        },
+        reason: null,
+      },
+      recoveryToken: `v1-sha256-${"3".repeat(64)}`,
+      destination: { directory: "/work/other", warning },
+    });
+
+    const outcome = await createCliRunner().run(
+      invocation({ argv: [located.ref.id, "--to", "/work/other"] }),
+      pipeline,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout.join("\n")).toContain(warning);
+    expect(outcome.stdout.join("\n")).toContain("Recover:");
+  });
+
   it("sanitizes an unrecoverable summary before printing it", async () => {
     const located = descriptor({
       ref: { agent: "codex", home: "/Users/me/.codex", id: "sess-3" },
@@ -299,34 +363,35 @@ describe("T-CLI-25 the identifier flow", () => {
 });
 
 describe("the Confirm line is runnable where it is printed", () => {
-  async function confirmCommand(overrides: Parameters<typeof invocation>[0]): Promise<string> {
+  it("uses the host's slash command when a target agent runs the tool", async () => {
     const { pipeline } = stubPipeline();
     const outcome = await createCliRunner().run(
-      invocation({ argv: ["sess-1", "--to", "/work/other"], ...overrides }),
+      invocation({ argv: ["sess-1", "--to", "/work/other"], targetAgent: "codex" }),
       pipeline,
     );
-    const confirm = outcome.stdout.find((line) => line.startsWith("Confirm: "));
-    if (confirm === undefined) throw new Error("no Confirm line was printed");
-    return confirm;
-  }
-
-  it("uses the host's slash command in plugin mode", async () => {
-    expect(await confirmCommand({ targetAgent: "codex", plugin: true })).toBe(
+    expect(outcome.stdout).toContain(
       `Confirm: /resume-from sess-1 --to /work/other --confirm ${CONFIRMATION_TOKEN}`,
     );
   });
 
-  it("repeats the shim flags in a manual shell invocation", async () => {
-    expect(
-      await confirmCommand({
-        targetAgent: "codex",
-        targetHome: "/home/codex",
-        plugin: false,
-      }),
-    ).toBe(
-      `Confirm: resume-from --target-agent codex --target-home /home/codex -- sess-1 ` +
-        `--to /work/other --confirm ${CONFIRMATION_TOKEN}`,
+  it("uses a runnable resume-from command in a bare shell", async () => {
+    const token = `v1-sha256-${"1".repeat(64)}`;
+    const { pipeline } = stubPipeline({
+      place: {
+        state: "recoverable",
+        directory: "/gone/app",
+        branch: "main",
+        warnings: [],
+        recovery: { directory: "/gone/app", commands: [], warnings: [] },
+        reason: null,
+      },
+      recoveryToken: token,
+    });
+    const outcome = await createCliRunner(null).run(
+      invocation({ argv: ["sess-1"], targetAgent: null }),
+      pipeline,
     );
+    expect(outcome.stdout).toContain(`Confirm: resume-from sess-1 --confirm ${token}`);
   });
 });
 

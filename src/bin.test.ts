@@ -31,7 +31,6 @@ describe("command help", () => {
       value: {
         targetAgent: null,
         targetHome: null,
-        plugin: false,
         rest: ["dc601a22", "--prompt", "go on"],
       },
     });
@@ -56,20 +55,7 @@ describe("trusted shim arguments", () => {
       value: {
         targetAgent: "codex",
         targetHome: "/home/with space",
-        plugin: false,
         rest: ["1", "--target-agent", "claude-code"],
-      },
-    });
-  });
-
-  it("records the plugin marker the installed host command passes", () => {
-    expect(readShimArgs(["--target-agent", "codex", "--plugin", "--", "1"])).toEqual({
-      ok: true,
-      value: {
-        targetAgent: "codex",
-        targetHome: null,
-        plugin: true,
-        rest: ["1"],
       },
     });
   });
@@ -78,8 +64,7 @@ describe("trusted shim arguments", () => {
     ["duplicate target", ["--target-agent", "codex", "--target-agent", "pi", "--"]],
     ["missing value", ["--target-agent", "--"]],
     ["a target home with no target", ["--target-home", "/home/x", "--"]],
-    ["a plugin marker with no target", ["--plugin", "--"]],
-    ["duplicate plugin markers", ["--target-agent", "codex", "--plugin", "--plugin", "--"]],
+    ["an unknown shim argument", ["--target-agent", "codex", "--verbose", "--"]],
   ])("rejects %s", (_name, argv) => {
     expect(readShimArgs(argv)).toMatchObject({ ok: false });
   });
@@ -90,7 +75,6 @@ describe("trusted shim arguments", () => {
       value: {
         targetAgent: null,
         targetHome: null,
-        plugin: false,
         rest: ["--target-agent", "codex"],
       },
     });
