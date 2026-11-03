@@ -23,6 +23,7 @@ The target-agent guide owns installation and landing instructions. The shared ge
 
 ## Releases
 
+- [v0.5.3](releases/v0.5.3.md) — resume in place in Claude Code, Codex and Pi.
 - [v0.5.2](releases/v0.5.2.md) — Claude Code imports ignore your own files beside sessions.
 - [v0.5.1](releases/v0.5.1.md) — personal-to-work profile imports and safe agterm launches.
 - [v0.5.0](releases/v0.5.0.md) — restore a session from its ID alone, native resume, worktree recovery, restore summary.
