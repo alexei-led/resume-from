@@ -91,15 +91,14 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
     },
 
     resumeCommand(input): string {
-      const argv = ["claude", "--resume", input.sessionId];
-      if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
       return resumeCommandLine({
         directory: input.directory,
-        argv,
+        argv: ["claude", "--resume", input.sessionId],
         env:
           input.home === capabilities.defaultHome
             ? null
             : { name: CONFIG_DIR_ENV, value: input.home },
+        prompt: input.prompt,
       });
     },
 

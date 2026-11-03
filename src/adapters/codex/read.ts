@@ -168,7 +168,7 @@ async function rolloutEntries(
 }
 
 /** Lenient: a file cut mid-entry still yields whatever parsed, with `truncated` set. */
-export async function scanRollout(filePath: string): Promise<CodexRollout> {
+async function scanRollout(filePath: string): Promise<CodexRollout> {
   const { entries, truncated } = await rolloutEntries(filePath);
   return rolloutFromEntries(filePath, entries, truncated);
 }

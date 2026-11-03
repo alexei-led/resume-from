@@ -248,9 +248,11 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
     },
 
     resumeCommand(input): string {
-      const argv = ["pi", "--session", input.filePath];
-      if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
-      return resumeCommandLine({ directory: input.directory, argv });
+      return resumeCommandLine({
+        directory: input.directory,
+        argv: ["pi", "--session", input.filePath],
+        prompt: input.prompt,
+      });
     },
 
     async loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {

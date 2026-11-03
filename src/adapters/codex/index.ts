@@ -63,15 +63,14 @@ export const codexAdapterFactory: CodexAdapterFactory = {
       findSessions: findCodexSessions,
       describeSession: describeCodexSession,
       resumeCommand(input): string {
-        const argv = ["codex", "resume", input.sessionId];
-        if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
         return resumeCommandLine({
           directory: input.directory,
-          argv,
+          argv: ["codex", "resume", input.sessionId],
           env:
             input.home === codexCapabilities().defaultHome
               ? null
               : { name: CODEX_HOME_ENV, value: input.home },
+          prompt: input.prompt,
         });
       },
       serialize: (session, target, marker, context) =>

@@ -10,6 +10,7 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import { sessionIdMatches } from "../id-match.js";
 import { redactSensitiveStructure, redactSensitiveText } from "../redaction.js";
+import { oneLine } from "../text.js";
 import type {
   CanonicalSession,
   CanonicalTurn,
@@ -88,10 +89,6 @@ interface ResultBody {
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
-}
-
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 function effectOf(toolName: string): ToolEffect {

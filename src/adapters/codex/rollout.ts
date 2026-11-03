@@ -12,6 +12,7 @@ import { createReadStream } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { asString } from "../json.js";
 import type { HomePath, SessionId } from "./contract.js";
 
 /** Codex reads this variable to find its home; so does this adapter (FR-2, FR-3). */
@@ -347,15 +348,11 @@ export function readSessionMeta(entry: RolloutEntry): CodexSessionMeta | null {
   const gitRecord = typeof git === "object" && git !== null ? (git as Record<string, unknown>) : {};
   return {
     id,
-    timestamp: stringOrNull(entry.payload.timestamp) ?? stringOrNull(entry.timestamp),
-    cwd: stringOrNull(entry.payload.cwd),
-    commit: stringOrNull(gitRecord.commit_hash),
-    branch: stringOrNull(gitRecord.branch),
+    timestamp: asString(entry.payload.timestamp) ?? asString(entry.timestamp),
+    cwd: asString(entry.payload.cwd),
+    commit: asString(gitRecord.commit_hash),
+    branch: asString(gitRecord.branch),
   };
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }
 
 export function isNotFoundError(error: unknown): boolean {

@@ -5,6 +5,10 @@
  * exactly two, `user` and `assistant` (C-9) — fewer types, fewer ways to corrupt the store.
  */
 
+import { asString } from "../json.js";
+
+export { asArray, asRecord as asObject, asString } from "../json.js";
+
 export const ENTRY_TYPE_USER = "user";
 export const ENTRY_TYPE_ASSISTANT = "assistant";
 export const ENTRY_TYPE_SUMMARY = "summary";
@@ -100,19 +104,6 @@ export function resolveActiveEntryPath(entries: RawEntry[]): ActiveEntryPath {
     current = parent;
   }
   return { entries: reversed.reverse(), unreadable: null };
-}
-
-export function asString(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
-}
-
-export function asObject(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-export function asArray(value: unknown): unknown[] | null {
-  return Array.isArray(value) ? value : null;
 }
 
 /** ISO-8601 UTC, the vocabulary every timestamp of the canonical model uses. */

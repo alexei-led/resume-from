@@ -5,7 +5,7 @@
  */
 
 /** The shortest non-exact match. A shorter query must be a whole ID. */
-export const MIN_SESSION_ID_PREFIX = 6;
+const MIN_SESSION_ID_PREFIX = 6;
 
 /**
  * True when `id` is the query itself, or starts with a query of at least six characters.

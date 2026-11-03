@@ -14,7 +14,12 @@
 
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { isRecord } from "../json.js";
+import { oneLine } from "../text.js";
 import type { ToolEffect } from "./contract.js";
+
+export { isRecord } from "../json.js";
+export { oneLine } from "../text.js";
 
 /** Pi's current session file version (`CURRENT_SESSION_VERSION`). */
 export const PI_SESSION_VERSION = 3;
@@ -250,10 +255,6 @@ export const NON_TURN_ENTRY_TYPES: ReadonlySet<string> = new Set([
 
 // --- Small readers ----------------------------------------------------------------
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function asHeader(value: unknown): PiSessionHeader | null {
   if (!isRecord(value)) return null;
   if (value.type !== "session") return null;
@@ -346,11 +347,6 @@ export function toolEffectFor(toolName: string): ToolEffect {
   if (READ_ONLY_TOOLS.has(name)) return "read-only";
   if (MUTATING_TOOLS.has(name)) return "mutating";
   return "unknown";
-}
-
-/** One line, whatever the input contained. */
-export function oneLine(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 export function truncate(text: string, limit: number): string {
