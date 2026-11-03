@@ -4,7 +4,10 @@
  * ignored (FR-28, C-4).
  */
 
-import { isAbsolute } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, isAbsolute } from "node:path";
+import { zstdDecompressSync } from "node:zlib";
+import { sessionIdMatches } from "../id-match.js";
 import { redactSensitiveArgumentsText, redactSensitiveText } from "../redaction.js";
 import type {
   CanonicalSession,
@@ -17,6 +20,8 @@ import type {
 } from "./contract.js";
 import type { CodexSessionMeta, RolloutEntry, RolloutStreamState } from "./rollout.js";
 import {
+  ARCHIVED_SESSION_MAX_AGE_MS,
+  ARCHIVED_SESSION_SUFFIX,
   CODEX_ENTRY_COMPACTED,
   CODEX_ENTRY_EVENT_MSG,
   CODEX_ENTRY_RESPONSE_ITEM,
@@ -39,11 +44,16 @@ import {
   CODEX_THREAD_ITEM_REASONING,
   CODEX_THREAD_ITEM_SUB_AGENT_ACTIVITY,
   CODEX_THREAD_ITEM_USER_MESSAGE,
+  homeOfSessionFile,
+  homeOfSessionsRoot,
+  isArchivedRolloutFileName,
   isNotFoundError,
   KNOWN_ENTRY_TYPES,
   listRolloutFiles,
+  parseRolloutText,
   payloadType,
   readSessionMeta,
+  sessionIdFromRolloutFileName,
   sessionsRoot,
   streamRolloutEntries,
   toIsoUtc,
@@ -96,22 +106,12 @@ export class CodexRolloutUnreadableError extends Error {
   }
 }
 
-/** Lenient: a file cut mid-entry still yields whatever parsed, with `truncated` set. */
-export async function scanRollout(filePath: string): Promise<CodexRollout> {
-  // The same streamed reader the listing uses, so both call a line over the cap damage (C-13): one
-  // reader, one damage rule, and no whole file in memory. Reading stops at the first damage through
-  // `stop`, which lets the reader end the file on its own terms instead of being abandoned mid-read;
-  // `readRollout` refuses a damaged file anyway, so the rest of it cannot matter.
-  const state: RolloutStreamState = { truncated: false, stop: false };
-  const entries: RolloutEntry[] = [];
-  for await (const entry of streamRolloutEntries(filePath, state)) {
-    if (state.truncated) {
-      state.stop = true;
-      continue;
-    }
-    entries.push(entry);
-  }
-
+/** Builds the session from parsed entries. One builder for a live and an archived file. */
+function rolloutFromEntries(
+  filePath: string,
+  entries: RolloutEntry[],
+  truncated: boolean,
+): CodexRollout {
   let meta: CodexSessionMeta | null = null;
   for (const entry of entries) {
     meta = readSessionMeta(entry);
@@ -131,8 +131,46 @@ export async function scanRollout(filePath: string): Promise<CodexRollout> {
     updatedAt: toIsoUtc(lastStamp?.timestamp ?? meta?.timestamp ?? null),
     title: titleOf(firstUserTurn?.text ?? ""),
     changedPaths,
-    truncated: state.truncated,
+    truncated,
   };
+}
+
+/** True when Codex stored this thread compressed, in its archive. */
+function isArchived(filePath: string): boolean {
+  return filePath.endsWith(ARCHIVED_SESSION_SUFFIX);
+}
+
+/** The text of an archived thread. A live thread is never held whole. */
+async function archivedText(filePath: string): Promise<string> {
+  return zstdDecompressSync(await readFile(filePath)).toString("utf8");
+}
+
+/** Every entry of a rollout, streaming a live one and decompressing an archived one. */
+async function rolloutEntries(
+  filePath: string,
+): Promise<{ entries: RolloutEntry[]; truncated: boolean }> {
+  if (isArchived(filePath)) return parseRolloutText(await archivedText(filePath));
+
+  // The same streamed reader the listing uses, so both call a line over the cap damage (C-13): one
+  // reader, one damage rule, and no whole file in memory. Reading stops at the first damage through
+  // `stop`, which lets the reader end the file on its own terms instead of being abandoned mid-read;
+  // `readRollout` refuses a damaged file anyway, so the rest of it cannot matter.
+  const state: RolloutStreamState = { truncated: false, stop: false };
+  const entries: RolloutEntry[] = [];
+  for await (const entry of streamRolloutEntries(filePath, state)) {
+    if (state.truncated) {
+      state.stop = true;
+      continue;
+    }
+    entries.push(entry);
+  }
+  return { entries, truncated: state.truncated };
+}
+
+/** Lenient: a file cut mid-entry still yields whatever parsed, with `truncated` set. */
+export async function scanRollout(filePath: string): Promise<CodexRollout> {
+  const { entries, truncated } = await rolloutEntries(filePath);
+  return rolloutFromEntries(filePath, entries, truncated);
 }
 
 /** Strict: FR-51's "unreadable" answer. */
@@ -153,6 +191,96 @@ export interface RolloutSummary {
   truncated: boolean;
 }
 
+/** Everything one pass over a rollout accumulates for its row. */
+interface SummaryState {
+  meta: CodexSessionMeta | null;
+  firstEntryStamp: string | null;
+  seenEntry: boolean;
+  lastStamp: string | null;
+  messages: number;
+  itemToolCalls: number;
+  summaryTurns: number;
+  itemSeen: boolean;
+  legacyDialogueBeforeItems: boolean;
+  legacyCallsBeforeItems: number;
+  legacyCallsAfterItems: number;
+  title: string;
+}
+
+function newSummaryState(): SummaryState {
+  return {
+    meta: null,
+    firstEntryStamp: null,
+    seenEntry: false,
+    lastStamp: null,
+    messages: 0,
+    itemToolCalls: 0,
+    summaryTurns: 0,
+    itemSeen: false,
+    legacyDialogueBeforeItems: false,
+    legacyCallsBeforeItems: 0,
+    legacyCallsAfterItems: 0,
+    title: "",
+  };
+}
+
+/** Accounts one entry. The same rule for a live stream and a decompressed archive. */
+function accountSummary(state: SummaryState, entry: RolloutEntry): void {
+  if (state.meta === null) state.meta = readSessionMeta(entry);
+  const stamp = toIsoUtc(entry.timestamp);
+  if (!state.seenEntry) {
+    state.seenEntry = true;
+    state.firstEntryStamp = stamp;
+  }
+  if (stamp !== null) state.lastStamp = stamp;
+  const itemTurn = isItemCompletedTurn(entry);
+  if (itemTurn) state.itemSeen = true;
+
+  const turn = classifyEntry(entry);
+  switch (turn.kind) {
+    case "summary":
+      state.summaryTurns += 1;
+      break;
+    case "message":
+      state.messages += 1;
+      if (!state.itemSeen && isLegacyMessageTurn(entry)) state.legacyDialogueBeforeItems = true;
+      if (turn.role === "user" && state.title === "") state.title = turn.text;
+      break;
+    case "tool-call":
+      if (turn.schema === "item-completed") state.itemToolCalls += 1;
+      else if (state.itemSeen) state.legacyCallsAfterItems += 1;
+      else state.legacyCallsBeforeItems += 1;
+      break;
+    default:
+      // "none" and "unknown" contribute no turn.
+      break;
+  }
+}
+
+function finishSummary(filePath: string, state: SummaryState, truncated: boolean): RolloutSummary {
+  const metaStamp = toIsoUtc(state.meta?.timestamp ?? null);
+  return {
+    filePath,
+    meta: state.meta,
+    // The title reaches the target's metadata, so it is redacted as the turn text is (FR-28).
+    title: titleOf(redactSensitiveText(state.title)),
+    startedAt: metaStamp ?? state.firstEntryStamp,
+    updatedAt: state.lastStamp ?? metaStamp,
+    // The calls a mixed-era file made before its first item turn are kept; the rest are repeats or
+    // an item-era file's whole `response_item` stream, so they are not counted (C-12).
+    turnCount:
+      state.summaryTurns +
+      state.messages +
+      state.itemToolCalls +
+      (state.itemSeen
+        ? state.legacyDialogueBeforeItems
+          ? state.legacyCallsBeforeItems
+          : 0
+        : state.legacyCallsBeforeItems + state.legacyCallsAfterItems),
+    truncated,
+  };
+}
+
 /**
  * Sums up one rollout for the selection list in a single streamed pass (C-13): no turn is built,
  * no argument is redacted, and neither the file nor its entries are held whole. Every field comes
@@ -160,73 +288,53 @@ export interface RolloutSummary {
  */
 export async function summarizeRollout(filePath: string): Promise<RolloutSummary> {
   // The listing never stops early: every entry decides the row (C-13).
-  const state: RolloutStreamState = { truncated: false, stop: false };
-  let meta: CodexSessionMeta | null = null;
-  let firstEntryStamp: string | null = null;
-  let seenEntry = false;
-  let lastStamp: string | null = null;
-  let messages = 0;
-  let itemToolCalls = 0;
-  let summaryTurns = 0;
-  let itemSeen = false;
-  let legacyDialogueBeforeItems = false;
-  let legacyCallsBeforeItems = 0;
-  let legacyCallsAfterItems = 0;
-  let title = "";
-
-  for await (const entry of streamRolloutEntries(filePath, state)) {
-    if (meta === null) meta = readSessionMeta(entry);
-    const stamp = toIsoUtc(entry.timestamp);
-    if (!seenEntry) {
-      seenEntry = true;
-      firstEntryStamp = stamp;
-    }
-    if (stamp !== null) lastStamp = stamp;
-    const itemTurn = isItemCompletedTurn(entry);
-    if (itemTurn) itemSeen = true;
-
-    const turn = classifyEntry(entry);
-    switch (turn.kind) {
-      case "summary":
-        summaryTurns += 1;
-        break;
-      case "message":
-        messages += 1;
-        if (!itemSeen && isLegacyMessageTurn(entry)) legacyDialogueBeforeItems = true;
-        if (turn.role === "user" && title === "") title = turn.text;
-        break;
-      case "tool-call":
-        if (turn.schema === "item-completed") itemToolCalls += 1;
-        else if (itemSeen) legacyCallsAfterItems += 1;
-        else legacyCallsBeforeItems += 1;
-        break;
-      default:
-        // "none" and "unknown" contribute no turn.
-        break;
-    }
+  const streamState: RolloutStreamState = { truncated: false, stop: false };
+  const state = newSummaryState();
+  for await (const entry of streamRolloutEntries(filePath, streamState)) {
+    accountSummary(state, entry);
   }
+  return finishSummary(filePath, state, streamState.truncated);
+}
 
-  const metaStamp = toIsoUtc(meta?.timestamp ?? null);
+/** The same summary for an archived thread, whose text is already whole in memory. */
+function summarizeRolloutText(filePath: string, text: string): RolloutSummary {
+  const { entries, truncated } = parseRolloutText(text);
+  const state = newSummaryState();
+  for (const entry of entries) accountSummary(state, entry);
+  return finishSummary(filePath, state, truncated);
+}
+
+/** The summary of one rollout, streaming a live file and decompressing an archived one. */
+async function summarizeFile(filePath: string): Promise<RolloutSummary> {
+  return isArchived(filePath)
+    ? summarizeRolloutText(filePath, await archivedText(filePath))
+    : summarizeRollout(filePath);
+}
+
+/** One row from one rollout summary. Listing, lookup and path selection share this builder. */
+function describeSummary(
+  home: string,
+  filePath: string,
+  summary: RolloutSummary,
+): SessionDescriptor | null {
+  const meta = summary.meta;
+  if (meta === null) return null;
+  const repoPaths = meta.cwd !== null && isAbsolute(meta.cwd) ? [meta.cwd] : [];
   return {
+    ref: { agent: "codex", home, id: meta.id },
+    title: summary.title,
+    startedAt: summary.startedAt ?? "",
+    updatedAt: summary.updatedAt ?? summary.startedAt ?? "",
+    turnCount: summary.turnCount,
+    repoPath: repoPaths[0] ?? null,
+    repoPaths,
+    startDirectory: repoPaths[0] ?? null,
     filePath,
-    meta,
-    // The title reaches the target's metadata, so it is redacted as the turn text is (FR-28).
-    title: titleOf(redactSensitiveText(title)),
-    startedAt: metaStamp ?? firstEntryStamp,
-    updatedAt: lastStamp ?? metaStamp,
-    // The calls a mixed-era file made before its first item turn are kept; the rest are repeats or
-    // an item-era file's whole `response_item` stream, so they are not counted (C-12).
-    turnCount:
-      summaryTurns +
-      messages +
-      itemToolCalls +
-      (itemSeen
-        ? legacyDialogueBeforeItems
-          ? legacyCallsBeforeItems
-          : 0
-        : legacyCallsBeforeItems + legacyCallsAfterItems),
-    truncated: state.truncated,
   };
+}
+
+function sortDescriptors(descriptors: SessionDescriptor[]): SessionDescriptor[] {
+  return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export async function listCodexSessions(home: string): Promise<SessionDescriptor[]> {
@@ -235,9 +343,9 @@ export async function listCodexSessions(home: string): Promise<SessionDescriptor
   let firstFailure: unknown = null;
 
   for (const filePath of await listRolloutFiles(sessionsRoot(home))) {
-    let summary: RolloutSummary;
+    let descriptor: SessionDescriptor | null;
     try {
-      summary = await summarizeRollout(filePath);
+      descriptor = describeSummary(home, filePath, await summarizeFile(filePath));
     } catch (error) {
       if (isNotFoundError(error)) continue; // A rollout may disappear during a concurrent cleanup.
       // One unreadable rollout must not hide the rest of the home (C-13). The home still reports a
@@ -246,27 +354,51 @@ export async function listCodexSessions(home: string): Promise<SessionDescriptor
       firstFailure ??= error;
       continue;
     }
-    const meta = summary.meta;
-    if (meta === null) continue;
-    const repoPaths = meta.cwd !== null && isAbsolute(meta.cwd) ? [meta.cwd] : [];
-    descriptors.push({
-      ref: { agent: "codex", home, id: meta.id },
-      title: summary.title,
-      startedAt: summary.startedAt ?? "",
-      updatedAt: summary.updatedAt ?? summary.startedAt ?? "",
-      turnCount: summary.turnCount,
-      repoPath: repoPaths[0] ?? null,
-      repoPaths,
-      startDirectory: repoPaths[0] ?? null,
-      filePath,
-    });
+    if (descriptor !== null) descriptors.push(descriptor);
   }
 
   if (descriptors.length === 0 && failed > 0) {
     throw firstFailure instanceof Error ? firstFailure : new Error(String(firstFailure));
   }
-  descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  return descriptors;
+  return sortDescriptors(descriptors);
+}
+
+/**
+ * Sessions of one `sessions` or `archived_sessions` root whose ID matches the query (FR-61).
+ * Archived threads older than the 14-day limit are not searched; only matching files are parsed.
+ */
+export async function findCodexSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+  const home = homeOfSessionsRoot(root);
+  const descriptors: SessionDescriptor[] = [];
+  for (const filePath of await listRolloutFiles(root)) {
+    const name = basename(filePath);
+    const id = sessionIdFromRolloutFileName(name);
+    if (id === null || !sessionIdMatches(id, query)) continue;
+    if (isArchivedRolloutFileName(name)) {
+      const modified = await stat(filePath)
+        .then((info) => info.mtimeMs)
+        .catch(() => null);
+      if (modified === null || Date.now() - modified > ARCHIVED_SESSION_MAX_AGE_MS) continue;
+    }
+    try {
+      const descriptor = describeSummary(home, filePath, await summarizeFile(filePath));
+      if (descriptor !== null) descriptors.push(descriptor);
+    } catch (error) {
+      if (isNotFoundError(error)) continue;
+      throw error;
+    }
+  }
+  return sortDescriptors(descriptors);
+}
+
+/** One session file described directly, for selection by path (FR-12). */
+export async function describeCodexSession(filePath: string): Promise<SessionDescriptor> {
+  const home = homeOfSessionFile(filePath);
+  const descriptor = describeSummary(home, filePath, await summarizeFile(filePath));
+  if (descriptor === null) {
+    throw new Error(`the Codex thread ${filePath} records no session metadata`);
+  }
+  return descriptor;
 }
 
 export async function loadCodexSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {

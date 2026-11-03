@@ -240,6 +240,7 @@ export function fakeAdapter(options: FakeAdapterOptions): AgentAdapter {
     provenance: "out-of-context-entry",
     defaultHome: options.defaultHome ?? resolve(sep, "fake-home", options.agent),
     defaultWindowTokens: options.defaultWindowTokens ?? 100_000,
+    idLookup: { v4: 0, v7: 0, other: 0 },
   });
   const rows = options.sessions;
   return {
@@ -247,6 +248,10 @@ export function fakeAdapter(options: FakeAdapterOptions): AgentAdapter {
     listSessions: () =>
       rows === undefined ? notCalled(options.agent, "listSessions") : Promise.resolve(rows),
     loadSession: () => notCalled(options.agent, "loadSession"),
+    searchRoots: () => notCalled(options.agent, "searchRoots"),
+    findSessions: () => notCalled(options.agent, "findSessions"),
+    describeSession: () => notCalled(options.agent, "describeSession"),
+    resumeCommand: () => notCalled(options.agent, "resumeCommand"),
     serialize: () => notCalled(options.agent, "serialize"),
     validate: () => notCalled(options.agent, "validate"),
     readBack: () => notCalled(options.agent, "readBack"),

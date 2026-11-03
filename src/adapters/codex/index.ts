@@ -4,10 +4,16 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { resumeCommandLine } from "../shell.js";
 import type { AgentAdapter, AgentCapabilities, CodexAdapterFactory } from "./contract.js";
-import { listCodexSessions, loadCodexSession } from "./read.js";
+import {
+  describeCodexSession,
+  findCodexSessions,
+  listCodexSessions,
+  loadCodexSession,
+} from "./read.js";
 import { readBackCodex, switchToCodex } from "./readback.js";
-import { defaultCodexHome } from "./rollout.js";
+import { CODEX_HOME_ENV, searchRoots as codexSearchRoots, defaultCodexHome } from "./rollout.js";
 import { type CodexSerializeDeps, serializeCodex, validateCodex } from "./write.js";
 
 /** Codex's own default for the models it ships with. Configuration overrides it (FR-18). */
@@ -30,6 +36,8 @@ function codexCapabilities(): AgentCapabilities {
     provenance: "host-output-only",
     defaultHome: defaultCodexHome(),
     defaultWindowTokens: CODEX_WINDOW_TOKENS,
+    // UUIDv7 is Codex's own shape; a v4 or custom query is searched here later (FR-61).
+    idLookup: { v4: 1, v7: 0, other: 1 },
   };
 }
 
@@ -40,6 +48,21 @@ export const codexAdapterFactory: CodexAdapterFactory = {
       capabilities: codexCapabilities,
       listSessions: listCodexSessions,
       loadSession: loadCodexSession,
+      searchRoots: codexSearchRoots,
+      findSessions: findCodexSessions,
+      describeSession: describeCodexSession,
+      resumeCommand(input): string {
+        const argv = ["codex", "resume", input.sessionId];
+        if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
+        return resumeCommandLine({
+          directory: input.directory,
+          argv,
+          env:
+            input.home === codexCapabilities().defaultHome
+              ? null
+              : { name: CODEX_HOME_ENV, value: input.home },
+        });
+      },
       serialize: (session, target, marker, context) =>
         serializeCodex(session, target, marker, context, deps),
       validate: validateCodex,

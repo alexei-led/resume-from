@@ -7,7 +7,8 @@
  */
 
 import { readFile, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { dirname, isAbsolute } from "node:path";
+import { sessionIdMatches } from "../id-match.js";
 import { redactSensitiveStructure, redactSensitiveText } from "../redaction.js";
 import type {
   CanonicalSession,
@@ -29,7 +30,7 @@ import {
   resolveActiveEntryPath,
   toIsoUtc,
 } from "./entries.js";
-import { listSessionFiles, sessionIdOf } from "./layout.js";
+import { homeOfSessionFile, listSessionFiles, listSessionFilesIn, sessionIdOf } from "./layout.js";
 
 /** FR-25: every dropped body is marked in text the model can read. */
 export const DROPPED_MARKER = "(content dropped: imported session, may be stale)";
@@ -431,6 +432,46 @@ function startDirectoryOf(entries: RawEntry[]): string | null {
   return null;
 }
 
+/** One row from one session file. Listing and lookup both build rows through this function. */
+function describeFile(
+  home: HomePath,
+  file: string,
+  text: string,
+  modified: string,
+): SessionDescriptor {
+  const read = readSessionText(text);
+  const broken = read.unreadable !== null;
+  return {
+    ref: { agent: "claude-code", home, id: sessionIdOf(file) },
+    title: broken ? UNREADABLE_TITLE : read.title === "" ? UNTITLED : read.title,
+    startedAt: broken ? modified : (read.startedAt ?? modified),
+    updatedAt: broken ? modified : (read.updatedAt ?? modified),
+    turnCount: broken ? 0 : read.turns.length,
+    repoPath: read.repoPath,
+    repoPaths: read.repoPaths,
+    startDirectory: read.startDirectory,
+    filePath: file,
+  };
+}
+
+function sortDescriptors(descriptors: SessionDescriptor[]): SessionDescriptor[] {
+  return descriptors.sort((a, b) => {
+    if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
+    return a.ref.id < b.ref.id ? -1 : 1;
+  });
+}
+
+/** Reads one file into a row, or null when it cannot be read. */
+async function describeFileOnDisk(home: HomePath, file: string): Promise<SessionDescriptor | null> {
+  try {
+    const text = await readFile(file, "utf8");
+    const modified = (await stat(file)).mtime.toISOString();
+    return describeFile(home, file, text, modified);
+  } catch {
+    return null;
+  }
+}
+
 /** One row per session file of the home, newest first (FR-11, FR-14). */
 export async function listSessions(home: HomePath): Promise<SessionDescriptor[]> {
   const descriptors: SessionDescriptor[] = [];
@@ -439,33 +480,34 @@ export async function listSessions(home: HomePath): Promise<SessionDescriptor[]>
   // 200 such files cost ≈ 1 s. Ceiling accepted; revisit if a home with thousands of
   // large sessions makes the listing noticeably slow to users.
   for (const file of await listSessionFiles(home)) {
-    let text: string;
-    let modified: string;
-    try {
-      text = await readFile(file, "utf8");
-      modified = (await stat(file)).mtime.toISOString();
-    } catch {
-      continue;
-    }
-    const read = readSessionText(text);
-    const broken = read.unreadable !== null;
-    descriptors.push({
-      ref: { agent: "claude-code", home, id: sessionIdOf(file) },
-      title: broken ? UNREADABLE_TITLE : read.title === "" ? UNTITLED : read.title,
-      startedAt: broken ? modified : (read.startedAt ?? modified),
-      updatedAt: broken ? modified : (read.updatedAt ?? modified),
-      turnCount: broken ? 0 : read.turns.length,
-      repoPath: read.repoPath,
-      repoPaths: read.repoPaths,
-      startDirectory: read.startDirectory,
-      filePath: file,
-    });
+    const descriptor = await describeFileOnDisk(home, file);
+    if (descriptor !== null) descriptors.push(descriptor);
   }
-  descriptors.sort((a, b) => {
-    if (a.updatedAt !== b.updatedAt) return a.updatedAt < b.updatedAt ? 1 : -1;
-    return a.ref.id < b.ref.id ? -1 : 1;
-  });
-  return descriptors;
+  return sortDescriptors(descriptors);
+}
+
+/**
+ * Sessions of one `projects` root whose ID matches the query (FR-61). The file name decides the
+ * match, so a home of a thousand sessions reads only the few the user named.
+ */
+export async function findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+  // The root is `<home>/projects`, one level above the home.
+  const home = dirname(root);
+  const descriptors: SessionDescriptor[] = [];
+  for (const file of await listSessionFilesIn(root)) {
+    if (!sessionIdMatches(sessionIdOf(file), query)) continue;
+    const descriptor = await describeFileOnDisk(home, file);
+    if (descriptor !== null) descriptors.push(descriptor);
+  }
+  return sortDescriptors(descriptors);
+}
+
+/** One session file described directly, for selection by path (FR-12). */
+export async function describeSession(filePath: string): Promise<SessionDescriptor> {
+  const home = homeOfSessionFile(filePath);
+  const text = await readFile(filePath, "utf8");
+  const modified = (await stat(filePath)).mtime.toISOString();
+  return describeFile(home, filePath, text, modified);
 }
 
 /** One session in the neutral vocabulary. A file cut mid-entry is reported, never guessed at. */

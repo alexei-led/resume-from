@@ -215,12 +215,84 @@ export function createFixtureAgentAdapter(options: FixtureAgentOptions = {}): Ag
     provenance: "out-of-context-entry",
     defaultHome: options.defaultHome ?? path.resolve(path.sep, "fixture-agent-home"),
     defaultWindowTokens: FIXTURE_WINDOW_TOKENS,
+    idLookup: { v4: 0, v7: 0, other: 0 },
   });
   const has = (role: AdapterRole): boolean => roles.includes(role);
+
+  function describeThread(
+    home: HomePath,
+    filePath: string,
+    thread: FixtureThread | null,
+  ): SessionDescriptor {
+    const id = path.basename(filePath).slice(0, -FIXTURE_FILE_SUFFIX.length);
+    if (thread === null) {
+      // A file this adapter cannot read is reported as unreadable, never as a shorter session.
+      return {
+        ref: { agent: FIXTURE_AGENT_ID, home, id },
+        title: `${UNREADABLE_TITLE} ${path.basename(filePath)}`,
+        startedAt: "",
+        updatedAt: "",
+        turnCount: 0,
+        repoPath: null,
+        repoPaths: [],
+        startDirectory: null,
+        filePath,
+      };
+    }
+    return {
+      ref: { agent: FIXTURE_AGENT_ID, home, id: thread.id },
+      title: thread.topic,
+      startedAt: thread.opened,
+      updatedAt: thread.touched,
+      turnCount: threadTurns(thread).turns.length,
+      repoPath: path.isAbsolute(thread.workspace) ? thread.workspace : null,
+      repoPaths: path.isAbsolute(thread.workspace) ? [thread.workspace] : [],
+      startDirectory: path.isAbsolute(thread.workspace) ? thread.workspace : null,
+      filePath,
+    };
+  }
+
+  function searchRoots(): string[] {
+    return [path.join(capabilities.defaultHome, FIXTURE_THREADS_DIR)];
+  }
+
+  async function describeFile(home: HomePath, filePath: string): Promise<SessionDescriptor> {
+    const text = await readFile(filePath, "utf8").catch(() => null);
+    return describeThread(home, filePath, text === null ? null : readThread(text));
+  }
 
   return {
     capabilities(): AgentCapabilities {
       return capabilities;
+    },
+
+    searchRoots,
+
+    async findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+      if (!has("source")) throw missingRole("source");
+      const names = (await readdir(root).catch(() => [])).filter((name) =>
+        name.endsWith(FIXTURE_FILE_SUFFIX),
+      );
+      const wanted = query.toLowerCase();
+      const rows: SessionDescriptor[] = [];
+      for (const name of names.sort()) {
+        const id = name.slice(0, -FIXTURE_FILE_SUFFIX.length);
+        const matches =
+          id.toLowerCase() === wanted ||
+          (wanted.length >= 6 && id.toLowerCase().startsWith(wanted));
+        if (!matches) continue;
+        rows.push(await describeFile(path.dirname(root), path.join(root, name)));
+      }
+      return rows;
+    },
+
+    describeSession(filePath: string): Promise<SessionDescriptor> {
+      return describeFile(path.dirname(path.dirname(filePath)), filePath);
+    },
+
+    resumeCommand(input): string {
+      const prompt = input.prompt === null ? "" : ` '${input.prompt}'`;
+      return `cd ${input.directory} && fixture-agent resume ${input.sessionId}${prompt}`;
     },
 
     async listSessions(home: HomePath): Promise<SessionDescriptor[]> {
@@ -236,35 +308,7 @@ export function createFixtureAgentAdapter(options: FixtureAgentOptions = {}): Ag
       for (const name of names.sort()) {
         if (!name.endsWith(FIXTURE_FILE_SUFFIX)) continue;
         const filePath = path.join(dir, name);
-        const text = await readFile(filePath, "utf8").catch(() => null);
-        const thread = text === null ? null : readThread(text);
-        const id = name.slice(0, -FIXTURE_FILE_SUFFIX.length);
-        if (thread === null) {
-          // A file this adapter cannot read is reported as unreadable, never as a shorter session.
-          descriptors.push({
-            ref: { agent: FIXTURE_AGENT_ID, home, id },
-            title: `${UNREADABLE_TITLE} ${name}`,
-            startedAt: "",
-            updatedAt: "",
-            turnCount: 0,
-            repoPath: null,
-            repoPaths: [],
-            startDirectory: null,
-            filePath,
-          });
-          continue;
-        }
-        descriptors.push({
-          ref: { agent: FIXTURE_AGENT_ID, home, id: thread.id },
-          title: thread.topic,
-          startedAt: thread.opened,
-          updatedAt: thread.touched,
-          turnCount: threadTurns(thread).turns.length,
-          repoPath: path.isAbsolute(thread.workspace) ? thread.workspace : null,
-          repoPaths: path.isAbsolute(thread.workspace) ? [thread.workspace] : [],
-          startDirectory: path.isAbsolute(thread.workspace) ? thread.workspace : null,
-          filePath,
-        });
+        descriptors.push(await describeFile(home, filePath));
       }
       return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     },

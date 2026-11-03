@@ -10,6 +10,8 @@
 import { randomUUID } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
+import { sessionIdMatches } from "../id-match.js";
+import { resumeCommandLine } from "../shell.js";
 import type {
   AgentAdapter,
   AgentCapabilities,
@@ -30,6 +32,9 @@ import type {
 import {
   DEFAULT_WINDOW_TOKENS,
   defaultPiHome,
+  homeOfSessionFile,
+  homeOfSessionsRoot,
+  searchRoots as piSearchRoots,
   sessionIdFromFileName,
   sessionsRoot,
   shortTitle,
@@ -59,9 +64,8 @@ const DEFAULT_DEPS: PiAdapterDeps = {
   defaultHome: defaultPiHome,
 };
 
-/** Every `.jsonl` below `<home>/sessions/`. Pi keeps one directory per repository. */
-async function sessionFilesIn(home: HomePath): Promise<string[]> {
-  const root = sessionsRoot(home);
+/** Every `.jsonl` below one session directory. Pi keeps one directory per repository. */
+async function sessionFilesInRoot(root: string): Promise<string[]> {
   const files: string[] = [];
   const walk = async (dir: string, depth: number): Promise<void> => {
     let names: string[];
@@ -87,6 +91,11 @@ async function sessionFilesIn(home: HomePath): Promise<string[]> {
   };
   await walk(root, 2);
   return files;
+}
+
+/** Every `.jsonl` below `<home>/sessions/`. */
+function sessionFilesIn(home: HomePath): Promise<string[]> {
+  return sessionFilesInRoot(sessionsRoot(home));
 }
 
 async function findSessionFile(home: HomePath, sessionId: SessionId): Promise<string | null> {
@@ -141,6 +150,41 @@ function describe(
   };
 }
 
+/** Reads one file into a row, or null when it cannot be read. */
+async function describeFileOnDisk(
+  home: HomePath,
+  filePath: string,
+): Promise<SessionDescriptor | null> {
+  try {
+    const text = await readFile(filePath, "utf8");
+    const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
+    return describe(home, filePath, text, fileTime);
+  } catch {
+    return null;
+  }
+}
+
+/** Sessions of one session directory whose ID matches the query (FR-61). */
+async function findPiSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+  const home = homeOfSessionsRoot(root);
+  const descriptors: SessionDescriptor[] = [];
+  for (const filePath of await sessionFilesInRoot(root)) {
+    const id = sessionIdFromFileName(basename(filePath));
+    if (id === null || !sessionIdMatches(id, query)) continue;
+    const descriptor = await describeFileOnDisk(home, filePath);
+    if (descriptor !== null) descriptors.push(descriptor);
+  }
+  return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+/** One session file described directly, for selection by path (FR-12). */
+async function describePiSession(filePath: string): Promise<SessionDescriptor> {
+  const home = homeOfSessionFile(filePath);
+  const text = await readFile(filePath, "utf8");
+  const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
+  return describe(home, filePath, text, fileTime);
+}
+
 /** The part of a Pi command context this module uses, and nothing else (C-10). */
 function asSwitchContext(runtime: AgentRuntime): PiSwitchContext {
   if (typeof runtime !== "object" || runtime === null) {
@@ -172,6 +216,8 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
         provenance: "out-of-context-entry",
         defaultHome: deps.defaultHome(),
         defaultWindowTokens: DEFAULT_WINDOW_TOKENS,
+        // Pi writes mostly UUIDv7, some v4, and custom names; a custom query is its best case.
+        idLookup: { v4: 2, v7: 1, other: 0 },
       };
     },
 
@@ -182,17 +228,28 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       // separately benchmarked for Pi files); revisit if a home with thousands of sessions
       // makes the listing noticeably slow to users.
       for (const filePath of await sessionFilesIn(home)) {
-        let text: string;
-        let fileTime: string;
-        try {
-          text = await readFile(filePath, "utf8");
-          fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
-        } catch {
-          continue;
-        }
-        descriptors.push(describe(home, filePath, text, fileTime));
+        const descriptor = await describeFileOnDisk(home, filePath);
+        if (descriptor !== null) descriptors.push(descriptor);
       }
       return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    },
+
+    searchRoots(): string[] {
+      return piSearchRoots();
+    },
+
+    findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+      return findPiSessions(root, query);
+    },
+
+    describeSession(filePath: string): Promise<SessionDescriptor> {
+      return describePiSession(filePath);
+    },
+
+    resumeCommand(input): string {
+      const argv = ["pi", "--session", input.filePath];
+      if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
+      return resumeCommandLine({ directory: input.directory, argv });
     },
 
     async loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {

@@ -13,7 +13,7 @@
  */
 
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ToolEffect } from "./contract.js";
 
 /** Pi's current session file version (`CURRENT_SESSION_VERSION`). */
@@ -24,6 +24,8 @@ const PI_CONFIG_DIR_NAME = ".pi";
 const PI_AGENT_DIR_NAME = "agent";
 /** Pi's own override of its agent directory (`ENV_AGENT_DIR` in Pi's config). */
 const ENV_AGENT_DIR = "PI_CODING_AGENT_DIR";
+/** Pi's own override of an individual session directory. */
+export const PI_SESSION_DIR_ENV = "PI_CODING_AGENT_SESSION_DIR";
 
 /**
  * The customType of the provenance entry. It is written as a `custom` entry, which Pi's
@@ -64,6 +66,44 @@ export function encodeCwd(cwd: string): string {
 
 export function sessionsRoot(home: string): string {
   return join(home, SESSIONS_DIR_NAME);
+}
+
+/**
+ * Where a global lookup searches. Pi treats any directory whose name holds "sessions" as a
+ * session directory (`sessions`, `sessions-work`, and so on): the roots are those directories,
+ * and the home of a session found below one is the agent directory that contains it.
+ */
+export function searchRoots(
+  env: NodeJS.ProcessEnv = process.env,
+  userHome: string = homedir(),
+): string[] {
+  const roots: string[] = [];
+  const agentDir = env[ENV_AGENT_DIR];
+  if (agentDir !== undefined && agentDir.trim().length > 0) {
+    roots.push(join(resolve(agentDir), SESSIONS_DIR_NAME));
+  }
+  const sessionDir = env[PI_SESSION_DIR_ENV];
+  if (sessionDir !== undefined && sessionDir.trim().length > 0) {
+    roots.push(resolve(sessionDir));
+  }
+  roots.push(join(resolve(userHome), PI_CONFIG_DIR_NAME, PI_AGENT_DIR_NAME, "*sessions*"));
+  return roots;
+}
+
+/** The home of a search root: the agent directory above a `*sessions*` directory. */
+export function homeOfSessionsRoot(root: string): string {
+  return dirname(root);
+}
+
+/** The agent directory that holds a session directory, and so the session file. */
+export function homeOfSessionFile(filePath: string): string {
+  let directory = dirname(filePath);
+  for (;;) {
+    if (basename(directory).includes(SESSIONS_DIR_NAME)) return dirname(directory);
+    const parent = dirname(directory);
+    if (parent === directory) return dirname(filePath);
+    directory = parent;
+  }
 }
 
 export function sessionDirFor(home: string, cwd: string): string {

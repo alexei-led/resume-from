@@ -245,6 +245,11 @@ interface AgentCapabilities {
   defaultHome: HomePath;
   /** Context window assumed for this agent when configuration overrides none (FR-18). */
   defaultWindowTokens: number;
+  /**
+   * The order a global ID lookup searches agents in, keyed by the shape of the query (FR-61).
+   * Lower is searched first; equal ranks keep the agent list's order.
+   */
+  idLookup: { v4: number; v7: number; other: number };
 }
 ```
 
@@ -305,6 +310,31 @@ interface AgentAdapter {
   listSessions(home: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
+
+  /**
+   * Source role. Directories or glob patterns where this agent keeps session files, including
+   * homes named by its environment. A global lookup expands them (FR-61).
+   */
+  searchRoots(): string[];
+  /**
+   * Source role. Sessions under one search root whose ID matches `query`. Only matching files
+   * are parsed, never every file of a home.
+   */
+  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
+  /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
+  describeSession(filePath: string): Promise<SessionDescriptor>;
+
+  /**
+   * The native command that resumes the session in its own agent. Paths are absolute and quoted
+   * only when needed; the home variable appears only when it is not the agent's default home.
+   */
+  resumeCommand(input: {
+    home: HomePath;
+    directory: string;
+    sessionId: SessionId;
+    filePath: string;
+    prompt: string | null;
+  }): string;
 
   /** Target role. Produces bytes only. It never creates a file (FR-49, FR-53). */
   serialize(
@@ -648,3 +678,18 @@ These run against every adapter in the list.
 - Scenario: a source session containing an `Edit`; it is imported into every target.
 - Expected behavior: the target starts no edit, requests no approval, and holds the call as text
   only (FR-26, NG-6).
+
+**T-ADA-24 — a lookup parses only the files it matched**
+- Scenario: each adapter lists a root containing the wanted session beside a corrupt file whose
+  name does not match.
+- Expected behavior: `findSessions` returns the wanted session and no error; a query matching
+  nothing returns no rows. The corrupt neighbour is never parsed (FR-61).
+- Scenario: Codex's `archived_sessions` holds a `.jsonl.zst` thread.
+- Expected behavior: a thread modified within 14 days is found and `loadSession` reads it; an
+  older one is not searched.
+
+**T-ADA-25 — a native resume command is quoted once**
+- Scenario: `resumeCommand` with a directory and prompt containing spaces and a quote, for each
+  agent.
+- Expected behavior: the directory and prompt are POSIX-quoted only when needed, and the agent's
+  home variable appears only when the home is not its default (FR-64).

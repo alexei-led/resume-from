@@ -106,6 +106,16 @@ export interface DiscoveryDestination {
   identity: RepoIdentity;
 }
 
+/** Finds one session anywhere on disk, without the repository filter (FR-61). */
+export interface SessionLocator {
+  /** Resolves a case-insensitive exact ID, or a prefix of at least six characters. */
+  byId(query: string): Promise<SessionDescriptor>;
+  /** Describes one session file directly (FR-12). */
+  byPath(filePath: string): Promise<SessionDescriptor>;
+  /** Every search root, fully resolved, in the order a lookup visits them. */
+  roots(): Promise<string[]>;
+}
+
 /** Finds, filters, orders and loads source sessions. It never writes. */
 export interface SessionFinder {
   /** Newest first (FR-14), only sessions of the current repository (FR-13). */

@@ -58,6 +58,10 @@ export interface StubAdapterOptions {
   loadResult?: CanonicalSession;
   /** Reorders what listSessions returns, to prove the ordering is a total order. */
   permute?: (rows: SessionDescriptor[]) => SessionDescriptor[];
+  /** Roots a global lookup expands. Defaults to the home itself. */
+  roots?: string[];
+  /** Search preference by query shape (FR-61). */
+  idLookup?: { v4: number; v7: number; other: number };
 }
 
 export interface StubAdapter extends SourceAdapter {
@@ -75,11 +79,50 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
     provenance: "host-output-only",
     defaultHome: options.defaultHome,
     defaultWindowTokens: 200_000,
+    idLookup: options.idLookup ?? { v4: 0, v7: 0, other: 0 },
   });
+
+  async function describeFile(home: HomePath, filePath: string): Promise<SessionDescriptor> {
+    const raw = JSON.parse(await readFile(filePath, "utf8")) as FixtureSession;
+    return {
+      ref: { agent: options.agent, home, id: raw.id },
+      title: raw.title ?? raw.id,
+      startedAt: raw.startedAt ?? raw.updatedAt,
+      updatedAt: raw.updatedAt,
+      turnCount: raw.turns?.length ?? 0,
+      repoPath: raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? raw.repoPath : null,
+      repoPaths:
+        raw.repoPaths ??
+        (raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? [raw.repoPath] : []),
+      startDirectory:
+        raw.startDirectory ??
+        (raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? raw.repoPath : null),
+      filePath,
+    };
+  }
 
   return {
     calls,
     capabilities,
+    searchRoots: () => options.roots ?? [options.defaultHome],
+    async findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+      calls.push(root);
+      const names = (await readdir(root).catch(() => [])).filter((n) => n.endsWith(".json"));
+      const wanted = query.toLowerCase();
+      const rows: SessionDescriptor[] = [];
+      for (const name of names) {
+        const id = name.slice(0, -".json".length);
+        const matches =
+          id.toLowerCase() === wanted ||
+          (wanted.length >= 6 && id.toLowerCase().startsWith(wanted));
+        if (!matches) continue;
+        rows.push(await describeFile(options.defaultHome, path.join(root, name)));
+      }
+      return rows;
+    },
+    describeSession(filePath: string): Promise<SessionDescriptor> {
+      return describeFile(options.defaultHome, filePath);
+    },
     async listSessions(home: HomePath): Promise<SessionDescriptor[]> {
       calls.push(home);
       const names = (await readdir(home)).filter((n) => n.endsWith(".json")).sort();
@@ -87,22 +130,7 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
       for (const name of names) {
         const filePath = path.join(home, name);
         // A corrupt file rejects the whole listing of this home, as a real reader would.
-        const raw = JSON.parse(await readFile(filePath, "utf8")) as FixtureSession;
-        rows.push({
-          ref: { agent: options.agent, home, id: raw.id },
-          title: raw.title ?? raw.id,
-          startedAt: raw.startedAt ?? raw.updatedAt,
-          updatedAt: raw.updatedAt,
-          turnCount: raw.turns?.length ?? 0,
-          repoPath: raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? raw.repoPath : null,
-          repoPaths:
-            raw.repoPaths ??
-            (raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? [raw.repoPath] : []),
-          startDirectory:
-            raw.startDirectory ??
-            (raw.repoPath !== null && path.isAbsolute(raw.repoPath) ? raw.repoPath : null),
-          filePath,
-        });
+        rows.push(await describeFile(home, filePath));
       }
       return options.permute ? options.permute(rows) : rows;
     },

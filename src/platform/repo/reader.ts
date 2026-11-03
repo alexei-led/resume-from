@@ -1,7 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { CommitDistance, RepoIdentity, RepoReader, RepoReaderOptions } from "./contract.js";
-import { type GitResult, normalizeGitOptions, runGit } from "./git.js";
+import { type GitResult, normalizeGitOptions, plausibleRevision, runGit } from "./git.js";
 
 /** Nothing is known: `ahead` and `behind` are 0 so a caller cannot print a fabricated distance. */
 function unknownDistance(): CommitDistance {
@@ -11,12 +11,6 @@ function unknownDistance(): CommitDistance {
 function unresolvedIdentity(): RepoIdentity {
   return { root: null, commonDir: null, isBare: false, head: null, branch: null };
 }
-
-/**
- * Longer than any revision git can resolve: a full commit is 40 characters, a tag or a ref
- * expression a few more. A longer string is a mistake or an attack, and is not sent to git.
- */
-const MAX_REVISION_LENGTH = 256;
 
 /** A reader with process controls only; every lookup names its directory explicitly. */
 export function createRepoReader(options: RepoReaderOptions = {}): RepoReader {
@@ -144,31 +138,6 @@ async function branch(dir: string, git: GitRunner): Promise<string | null> {
   const result = await git(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
   const name = result.stdout.trim();
   return result.ok && name !== "" ? name : null;
-}
-
-/**
- * A revision worth sending to git, trimmed, or null.
- *
- * A string that starts with `-` would be read as an option, an empty one names nothing, and a
- * control character or an absurd length is never a revision. Rejecting them here means the hostile
- * cases of T-REP-11 never reach a process at all.
- */
-function plausibleRevision(sourceCommit: string): string | null {
-  if (typeof sourceCommit !== "string") return null;
-  const revision = sourceCommit.trim();
-  if (revision === "" || revision.length > MAX_REVISION_LENGTH) return null;
-  if (revision.startsWith("-")) return null;
-  if (hasControlCharacter(revision)) return null;
-  return revision;
-}
-
-/** A NUL cannot be passed to a process at all, and no control character belongs in a revision. */
-function hasControlCharacter(value: string): boolean {
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    if (code < 0x20 || code === 0x7f) return true;
-  }
-  return false;
 }
 
 /** The real path of a directory, following symlinks, so paths compare as locations. */

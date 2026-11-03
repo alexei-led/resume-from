@@ -200,6 +200,38 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
   return { header, turns };
 }
 
+/** One row from one fixture file. Listing, lookup and path selection share this builder. */
+async function descriptorFor(
+  parsed: ParsedSession,
+  agent: AgentId,
+  home: HomePath,
+  filePath: string,
+): Promise<SessionDescriptor> {
+  const recorded = lastTimestamp(parsed.turns) ?? parsed.header.startedAt;
+  const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
+  return {
+    ref: { agent, home, id: parsed.header.id },
+    title: parsed.header.title,
+    startedAt: parsed.header.startedAt,
+    // The later of the two: a file touched after its last recorded turn has moved.
+    updatedAt: Date.parse(fileTime) > Date.parse(recorded) ? fileTime : recorded,
+    turnCount: parsed.turns.length,
+    repoPath:
+      parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
+        ? parsed.header.repoPath
+        : null,
+    repoPaths:
+      parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
+        ? [parsed.header.repoPath]
+        : [],
+    startDirectory:
+      parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
+        ? parsed.header.repoPath
+        : null,
+    filePath,
+  };
+}
+
 function provenanceOf(agent: AgentId, home: HomePath, parsed: ParsedSession): SourceProvenance {
   return {
     ref: { agent, home, id: parsed.header.id },
@@ -293,6 +325,7 @@ export function createStubAdapter(options: StubAdapterOptions): AgentAdapter {
         provenance: shape.provenance,
         defaultHome: options.home,
         defaultWindowTokens: options.windowTokens ?? 200_000,
+        idLookup: { v4: 0, v7: 0, other: 0 },
         ...options.capabilities,
       };
     },
@@ -311,31 +344,41 @@ export function createStubAdapter(options: StubAdapterOptions): AgentAdapter {
         if (!name.endsWith(".jsonl")) continue;
         const filePath = path.join(directory, name);
         const parsed = await parseSession(filePath);
-        const recorded = lastTimestamp(parsed.turns) ?? parsed.header.startedAt;
-        const fileTime = new Date((await stat(filePath)).mtimeMs).toISOString();
-        descriptors.push({
-          ref: { agent: options.agent, home, id: parsed.header.id },
-          title: parsed.header.title,
-          startedAt: parsed.header.startedAt,
-          // The later of the two: a file touched after its last recorded turn has moved.
-          updatedAt: Date.parse(fileTime) > Date.parse(recorded) ? fileTime : recorded,
-          turnCount: parsed.turns.length,
-          repoPath:
-            parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
-              ? parsed.header.repoPath
-              : null,
-          repoPaths:
-            parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
-              ? [parsed.header.repoPath]
-              : [],
-          startDirectory:
-            parsed.header.repoPath !== null && path.isAbsolute(parsed.header.repoPath)
-              ? parsed.header.repoPath
-              : null,
-          filePath,
-        });
+        descriptors.push(await descriptorFor(parsed, options.agent, home, filePath));
       }
       return descriptors;
+    },
+
+    searchRoots(): string[] {
+      return [path.join(options.home, SESSIONS_DIR)];
+    },
+
+    async findSessions(root: HomePath, query: string): Promise<SessionDescriptor[]> {
+      record("findSessions");
+      const names = (await readdir(root).catch(() => [])).filter((name) => name.endsWith(".jsonl"));
+      const wanted = query.toLowerCase();
+      const descriptors: SessionDescriptor[] = [];
+      for (const name of names.sort()) {
+        const id = name.slice(0, -".jsonl".length);
+        const matches =
+          id.toLowerCase() === wanted ||
+          (wanted.length >= 6 && id.toLowerCase().startsWith(wanted));
+        if (!matches) continue;
+        const filePath = path.join(root, name);
+        const parsed = await parseSession(filePath);
+        descriptors.push(await descriptorFor(parsed, options.agent, options.home, filePath));
+      }
+      return descriptors;
+    },
+
+    async describeSession(filePath: string): Promise<SessionDescriptor> {
+      const parsed = await parseSession(filePath);
+      return descriptorFor(parsed, options.agent, path.dirname(path.dirname(filePath)), filePath);
+    },
+
+    resumeCommand(input): string {
+      const prompt = input.prompt === null ? "" : ` ${input.prompt}`;
+      return `cd ${input.directory} && ${options.agent} resume ${input.sessionId}${prompt}`;
     },
 
     async loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {

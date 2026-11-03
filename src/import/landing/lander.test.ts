@@ -142,6 +142,7 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
     provenance: options.provenance ?? "out-of-context-entry",
     defaultHome: "/Users/tester/.target",
     defaultWindowTokens: 200_000,
+    idLookup: { v4: 0, v7: 0, other: 0 },
   };
 
   const stub: AdapterStub = {
@@ -158,6 +159,18 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
     loadSession(_descriptor: SessionDescriptor): Promise<CanonicalSession> {
       log.push("loadSession");
       return Promise.reject(new Error("not a source"));
+    },
+    searchRoots(): string[] {
+      return [];
+    },
+    findSessions(_root: string, _query: string): Promise<SessionDescriptor[]> {
+      return Promise.resolve([]);
+    },
+    describeSession(_filePath: string): Promise<SessionDescriptor> {
+      return Promise.reject(new Error("not a source"));
+    },
+    resumeCommand(): string {
+      return "resume";
     },
     serialize(
       session: CanonicalSession,

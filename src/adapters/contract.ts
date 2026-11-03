@@ -65,6 +65,11 @@ export interface AgentCapabilities {
   defaultHome: HomePath;
   /** Context window assumed for this agent when configuration overrides none (FR-18). */
   defaultWindowTokens: number;
+  /**
+   * The order a global ID lookup searches agents in, keyed by the shape of the query (FR-61).
+   * Lower is searched first; equal ranks keep the agent list's order.
+   */
+  idLookup: { v4: number; v7: number; other: number };
 }
 
 /**
@@ -119,6 +124,31 @@ export interface AgentAdapter {
   listSessions(home: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
+
+  /**
+   * Source role. Directories or glob patterns where this agent keeps session files, including
+   * homes named by its environment. A global lookup expands them (FR-61).
+   */
+  searchRoots(): string[];
+  /**
+   * Source role. Sessions under one search root whose ID matches `query`. Only matching files
+   * are parsed, never every file of a home.
+   */
+  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
+  /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
+  describeSession(filePath: string): Promise<SessionDescriptor>;
+
+  /**
+   * The native command that resumes the session in its own agent. Paths are absolute and quoted
+   * only when needed; the home variable appears only when it is not the agent's default home.
+   */
+  resumeCommand(input: {
+    home: HomePath;
+    directory: string;
+    sessionId: SessionId;
+    filePath: string;
+    prompt: string | null;
+  }): string;
 
   /** Target role. Produces bytes only. It never creates a file (FR-49, FR-53). */
   serialize(

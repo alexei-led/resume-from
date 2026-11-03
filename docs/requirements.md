@@ -485,6 +485,27 @@ them.
 
 ---
 
+## K. Restore from an ID
+
+**FR-61** — A session can be named by its ID or a prefix, anywhere on disk, without the repository
+filter. Matching is case-insensitive; an exact ID wins, a prefix of at least six characters selects
+when exactly one session matches, and several matches are listed as candidates. A prefix is
+matched against file names before any file is parsed. No match names the roots that were searched.
+
+**FR-62** — The recorded directory of a session is `startDirectory ?? repoPath`. It is `present`
+when it exists (with a warning when the checkout is on a different branch), `recoverable` when a
+parent repository matches a known worktree layout, and `unrecoverable` otherwise.
+
+**FR-63** — A recoverable directory is recreated only after confirmation, in this order: the
+recorded local branch, the recorded `origin/<branch>`, the recorded commit, then the repository's
+HEAD with a warning. A stale registration is pruned first. Recovery never fetches, forces, deletes,
+or writes into an existing path; a failed command reports git's own message and stops.
+
+**FR-64** — A native resume command is absolute, POSIX-quoted only where needed, and names the
+agent's home variable only when the home is not that agent's default.
+
+---
+
 ## Non-goals
 
 The tool must never do these things.
@@ -499,7 +520,7 @@ The tool must never do these things.
 | **NG-6**  | Run an imported tool call again.                                                                           |
 | **NG-7**  | Move tokens, passwords, or environment values.                                                             |
 | **NG-8**  | Move hidden reasoning.                                                                                     |
-| **NG-9**  | Import a session from a different repository.                                                              |
+| **NG-9**  | Import a session into a repository other than the one it ran in.                                           |
 | **NG-10** | Replace the history with a summary. The target must show real turns.                                       |
 
 The user can open the source session later to read it. The source session stays valid.

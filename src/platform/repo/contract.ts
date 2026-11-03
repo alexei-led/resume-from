@@ -41,3 +41,66 @@ export interface RepoReader {
   /** Compares HEAD with a commit of a source session (FR-37). */
   distanceFrom(cwd: string, sourceCommit: string): Promise<CommitDistance>;
 }
+
+/** Where the recorded directory of a session is (FR-61). */
+export type PlaceState = "present" | "recoverable" | "unrecoverable";
+
+/** What a session recorded about where it ran. */
+export interface PlaceRequest {
+  /** The recorded directory: `startDirectory ?? repoPath`. */
+  directory: string;
+  branch: string | null;
+  commit: string | null;
+}
+
+/** One git command a recovery would run, with its display form. */
+export interface RecoveryCommand {
+  cwd: string;
+  /** Arguments after `git -C <cwd>`, each separate. */
+  argv: string[];
+  /** The POSIX display form the user is shown. */
+  display: string;
+}
+
+/** How a missing directory would be recreated (FR-61). */
+export interface RecoverySteps {
+  repoRoot: string;
+  directory: string;
+  /** In order; a prune precedes the add when the directory is a stale registration. */
+  commands: RecoveryCommand[];
+  warnings: string[];
+  /** A note about the chosen branch or commit, when one applies. */
+  note: string | null;
+}
+
+/** Where a session's directory is, and what it would take to bring it back. */
+export interface Place {
+  state: PlaceState;
+  directory: string;
+  /** The checkout's current branch when the directory is present. */
+  branch: string | null;
+  warnings: string[];
+  /** Set only when recoverable. */
+  recovery: RecoverySteps | null;
+  /** Why the directory cannot be recovered, when unrecoverable. */
+  reason: string | null;
+}
+
+/** What running a recovery plan produced. */
+export interface RecoveryResult {
+  ok: boolean;
+  /** The display form of the command that failed, when one did. */
+  failedCommand: string | null;
+  stdout: string;
+  stderr: string;
+  /** git's own message, or the refusal reason. */
+  message: string | null;
+}
+
+/** Resolves a session's place and runs its recovery plan. It never forces, fetches or deletes. */
+export interface WorktreeRecovery {
+  /** Throws AbortError with the signal reason as cause when cancelled; performs no I/O. */
+  checkCancellation(): void;
+  place(request: PlaceRequest): Promise<Place>;
+  recover(plan: RecoverySteps): Promise<RecoveryResult>;
+}

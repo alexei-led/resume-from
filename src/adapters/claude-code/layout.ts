@@ -54,12 +54,33 @@ export function sessionIdOf(filePath: string): SessionId {
   return path.basename(filePath, SESSION_FILE_SUFFIX);
 }
 
-/** Every session file of a home, across all of its project directories. */
-export async function listSessionFiles(home: HomePath): Promise<string[]> {
-  const root = projectsDir(home);
+/**
+ * Where a global lookup searches: the configured home (`CLAUDE_CONFIG_DIR`) and every
+ * `~/.claude*` profile. These are glob patterns; `src/import/discovery/` expands them.
+ */
+export function searchRoots(
+  env: Record<string, string | undefined> = process.env,
+  userHome: string = homedir(),
+): string[] {
+  const roots: string[] = [];
+  const configured = env[CONFIG_DIR_ENV];
+  if (configured !== undefined && configured !== "" && path.isAbsolute(configured)) {
+    roots.push(path.join(path.resolve(configured), PROJECTS_DIR));
+  }
+  roots.push(path.join(path.resolve(userHome), ".claude*", PROJECTS_DIR));
+  return roots;
+}
+
+/** The profile home a session file belongs to: `<home>/projects/<project>/<id>.jsonl`. */
+export function homeOfSessionFile(filePath: string): HomePath {
+  return path.dirname(path.dirname(path.dirname(filePath)));
+}
+
+/** Every session file below one `projects` directory. */
+export async function listSessionFilesIn(projectsRoot: string): Promise<string[]> {
   let projects: string[];
   try {
-    projects = (await readdir(root, { withFileTypes: true }))
+    projects = (await readdir(projectsRoot, { withFileTypes: true }))
       .filter((item) => item.isDirectory())
       .map((item) => item.name);
   } catch {
@@ -67,7 +88,7 @@ export async function listSessionFiles(home: HomePath): Promise<string[]> {
   }
   const files: string[] = [];
   for (const project of projects) {
-    const dir = path.join(root, project);
+    const dir = path.join(projectsRoot, project);
     try {
       for (const item of await readdir(dir, { withFileTypes: true })) {
         if (item.isFile() && item.name.endsWith(SESSION_FILE_SUFFIX)) {
@@ -79,6 +100,11 @@ export async function listSessionFiles(home: HomePath): Promise<string[]> {
     }
   }
   return files;
+}
+
+/** Every session file of a home, across all of its project directories. */
+export function listSessionFiles(home: HomePath): Promise<string[]> {
+  return listSessionFilesIn(projectsDir(home));
 }
 
 /** The file of one session id, or null when the home does not hold it. */

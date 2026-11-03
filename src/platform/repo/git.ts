@@ -15,6 +15,36 @@ export interface GitResult {
 /** 1 MB. Every command here prints a line or two; more than this means something is wrong. */
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 
+/**
+ * Longer than any revision git can resolve: a full commit is 40 characters, a tag or a ref
+ * expression a few more. A longer string is a mistake or an attack, and is not sent to git.
+ */
+const MAX_REVISION_LENGTH = 256;
+
+/**
+ * A revision worth sending to git, trimmed, or null.
+ *
+ * A string that starts with `-` would be read as an option, an empty one names nothing, and a
+ * control character or an absurd length is never a revision.
+ */
+export function plausibleRevision(sourceCommit: string): string | null {
+  if (typeof sourceCommit !== "string") return null;
+  const revision = sourceCommit.trim();
+  if (revision === "" || revision.length > MAX_REVISION_LENGTH) return null;
+  if (revision.startsWith("-")) return null;
+  if (hasControlCharacter(revision)) return null;
+  return revision;
+}
+
+/** A NUL cannot be passed to a process at all, and no control character belongs in a revision. */
+function hasControlCharacter(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 /** Long enough for local repositories while still bounding a wedged filesystem or git process. */
 const DEFAULT_GIT_TIMEOUT_MS = 10_000;
 

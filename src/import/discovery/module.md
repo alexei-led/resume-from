@@ -26,6 +26,9 @@ It is the whole source side of the tool. Everything downstream — the rules, th
   (FR-10, FR-12). Reject an ID that matches more than one agent or home and tell the user how to
   disambiguate it.
 - Load the chosen session into the canonical vocabulary through its source adapter.
+- Locate one session anywhere on disk from an ID, prefix or file path, without the repository
+  filter (FR-61): expand each adapter's roots, order the search by the query's ID shape, match
+  file names case-insensitively, and explain ambiguity or an empty search.
 - Survive a home that is missing, unreadable, or holds a corrupt session file, without losing the
   rest of the listing.
 
@@ -206,6 +209,11 @@ interface AgentCapabilities {
   defaultHome: HomePath;
   /** Context window assumed for this agent when configuration overrides none (FR-18). */
   defaultWindowTokens: number;
+  /**
+   * The order a global ID lookup searches agents in, keyed by the shape of the query (FR-61).
+   * Lower is searched first; equal ranks keep the agent list's order.
+   */
+  idLookup: { v4: number; v7: number; other: number };
 }
 ```
 
@@ -219,6 +227,19 @@ interface AgentAdapter {
   listSessions(home: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
+
+  /**
+   * Source role. Directories or glob patterns where this agent keeps session files, including
+   * homes named by its environment. A global lookup expands them (FR-61).
+   */
+  searchRoots(): string[];
+  /**
+   * Source role. Sessions under one search root whose ID matches `query`. Only matching files
+   * are parsed, never every file of a home.
+   */
+  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
+  /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
+  describeSession(filePath: string): Promise<SessionDescriptor>;
 }
 ```
 
@@ -342,6 +363,18 @@ interface SessionFinder {
 }
 ```
 
+```ts
+/** Finds one session anywhere on disk, without the repository filter (FR-61). */
+interface SessionLocator {
+  /** Resolves a case-insensitive exact ID, or a prefix of at least six characters. */
+  byId(query: string): Promise<SessionDescriptor>;
+  /** Describes one session file directly (FR-12). */
+  byPath(filePath: string): Promise<SessionDescriptor>;
+  /** Every search root, fully resolved, in the order a lookup visits them. */
+  roots(): Promise<string[]>;
+}
+```
+
 ## Integrations
 
 - **Counterpart**: `src/session/`
@@ -403,6 +436,13 @@ Changes that require **only this module** to change:
 
 - **The pipeline derives `SearchScope.repoRoot` from request `destinationCwd`.** It is an internal search scope, not a second caller-supplied import destination. Repository membership uses canonical Git common-directory identity with exact-directory fallback; it never changes the destination checkout.
 
+- **A global lookup is not filtered by repository (FR-61).** `SessionLocator.byId` and `byPath`
+  search every root of every source adapter; the repository filter of `SessionFinder` does not
+  apply to them. Expanding a root and describing a matched file are reads only.
+- **Only a matching file is parsed.** A lookup matches the session ID in the file name first and
+  hands only matches to the adapter, so a home's unrelated sessions are never read.
+- **Roots are deduplicated by their canonical path.** Two spellings of one search root are one
+  root; two discovered descriptors for one file are one candidate.
 - **This module never writes anything**, to any home or any repository (NG-1, AC-4).
 - **This module never calls a model** (FR-8). A listing works when the source agent is stopped or out
   of quota, because everything comes from disk.
@@ -636,3 +676,12 @@ Tests use stub adapters over fixture homes and real temporary Git repositories/w
 - Expected behavior: the first is listed and resolvable while the second stays out with its
   diagnostic, and a conflicting candidate identity excludes a session even when its `startDirectory`
   is this directory (issue #5).
+
+**T-DIS-31 — a global lookup finds one session anywhere** (`locate.test.ts`)
+
+- Scenario: exact, uppercase, prefix and custom IDs; one ID in two agents; one file reached through
+  two root spellings; a query that matches nothing; a file named directly; each ID shape.
+- Expected behavior: exact wins, a prefix of at least six characters selects one match, several
+  matches list every candidate with its agent, home, directory, activity and title, no match names
+  the searched roots, a file path is described by the adapter whose root contains it, and the
+  search follows `idLookup` for the query's shape. Only matching files are parsed (FR-61).

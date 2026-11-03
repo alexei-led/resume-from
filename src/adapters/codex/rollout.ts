@@ -11,7 +11,7 @@
 import { createReadStream } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { HomePath, SessionId } from "./contract.js";
 
 /** Codex reads this variable to find its home; so does this adapter (FR-2, FR-3). */
@@ -109,8 +109,54 @@ export function defaultCodexHome(): HomePath {
     : join(homedir(), ".codex");
 }
 
+/** Where Codex moves a thread once it is archived. */
+export const ARCHIVED_SESSIONS_DIR = "archived_sessions";
+/** Archived threads are compressed; the adapter reads them with `zlib.zstdDecompressSync`. */
+export const ARCHIVED_SESSION_SUFFIX = ".jsonl.zst";
+/** Archived sessions older than this are not searched (FR-61, a constant by user decision). */
+export const ARCHIVED_SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
 export function sessionsRoot(home: HomePath): string {
   return join(home, "sessions");
+}
+
+/**
+ * Where a global lookup searches: the configured home and every `~/.codex*` profile. Archived
+ * threads live beside the live sessions, so both are roots. These are glob patterns; discovery
+ * expands them.
+ */
+export function searchRoots(
+  env: NodeJS.ProcessEnv = process.env,
+  userHome: string = homedir(),
+): string[] {
+  const roots: string[] = [];
+  const configured = env[CODEX_HOME_ENV];
+  if (configured !== undefined && configured !== "") {
+    const home = resolve(configured);
+    roots.push(join(home, "sessions"), join(home, ARCHIVED_SESSIONS_DIR));
+  }
+  roots.push(
+    join(resolve(userHome), ".codex*", "sessions"),
+    join(resolve(userHome), ".codex*", ARCHIVED_SESSIONS_DIR),
+  );
+  return roots;
+}
+
+/** The home of a search root: the directory above `sessions` or `archived_sessions`. */
+export function homeOfSessionsRoot(root: string): HomePath {
+  return dirname(root);
+}
+
+/** The home of a rollout file: the directory that holds its `sessions` (or archived) root. */
+export function homeOfSessionFile(filePath: string): HomePath {
+  let directory = dirname(filePath);
+  for (;;) {
+    const name = basename(directory);
+    if (name === "sessions" || name === ARCHIVED_SESSIONS_DIR) return dirname(directory);
+    const parent = dirname(directory);
+    if (parent === directory) return dirname(filePath);
+    directory = parent;
+  }
 }
 
 /** `<home>/sessions/YYYY/MM/DD/rollout-YYYY-MM-DDTHH-mm-ss-<id>.jsonl`, as Codex lays them out. */
@@ -122,14 +168,22 @@ export function rolloutFilePath(home: HomePath, sessionId: SessionId, at: Date):
   return join(sessionsRoot(home), year, month, day, `rollout-${stamp}-${sessionId}.jsonl`);
 }
 
-/** True when the file name is a rollout the picker would consider. */
+/** True when the file name is a rollout, live or archived. */
 export function isRolloutFileName(name: string): boolean {
   return name.startsWith("rollout-") && name.endsWith(".jsonl");
 }
 
+/** True when the rollout is an archived, compressed one. */
+export function isArchivedRolloutFileName(name: string): boolean {
+  return name.startsWith("rollout-") && name.endsWith(ARCHIVED_SESSION_SUFFIX);
+}
+
 /** The exact thread id encoded after Codex's fixed timestamp prefix. */
 export function sessionIdFromRolloutFileName(name: string): string | null {
-  const match = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/.exec(name);
+  const base = name.endsWith(ARCHIVED_SESSION_SUFFIX)
+    ? name.slice(0, -ARCHIVED_SESSION_SUFFIX.length) + ".jsonl"
+    : name;
+  const match = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/.exec(base);
   return match?.[1] ?? null;
 }
 
@@ -151,7 +205,12 @@ export async function listRolloutFiles(root: string): Promise<string[]> {
       const full = join(directory, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile() && isRolloutFileName(entry.name)) found.push(full);
+      else if (
+        entry.isFile() &&
+        (isRolloutFileName(entry.name) || isArchivedRolloutFileName(entry.name))
+      ) {
+        found.push(full);
+      }
     }
   };
   await walk(root);

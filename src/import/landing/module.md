@@ -294,6 +294,11 @@ interface AgentCapabilities {
   defaultHome: HomePath;
   /** Context window assumed for this agent when configuration overrides none (FR-18). */
   defaultWindowTokens: number;
+  /**
+   * The order a global ID lookup searches agents in, keyed by the shape of the query (FR-61).
+   * Lower is searched first; equal ranks keep the agent list's order.
+   */
+  idLookup: { v4: number; v7: number; other: number };
 }
 ```
 

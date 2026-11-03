@@ -3,6 +3,8 @@
  * about Claude Code.
  */
 
+import { homedir } from "node:os";
+import { resumeCommandLine } from "../shell.js";
 import type {
   AgentAdapter,
   AgentCapabilities,
@@ -20,9 +22,9 @@ import type {
   TargetProfile,
   ValidationDefect,
 } from "./contract.js";
-import { resolveDefaultHome } from "./layout.js";
+import { CONFIG_DIR_ENV, searchRoots as claudeSearchRoots, resolveDefaultHome } from "./layout.js";
 import { readBack } from "./readback.js";
-import { listSessions, loadSession } from "./reader.js";
+import { describeSession, findSessions, listSessions, loadSession } from "./reader.js";
 import { serialize, validate } from "./writer.js";
 
 /** Claude Code's context window, used when configuration overrides none (FR-18). */
@@ -52,6 +54,8 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
     defaultHome:
       deps.homeDir === undefined ? resolveDefaultHome(env) : resolveDefaultHome(env, deps.homeDir),
     defaultWindowTokens: DEFAULT_WINDOW_TOKENS,
+    // UUIDv4 is Claude Code's own shape; a v7 or custom query is searched here last (FR-61).
+    idLookup: { v4: 0, v7: 2, other: 2 },
   });
 
   return {
@@ -65,6 +69,31 @@ export function createClaudeCodeAdapter(deps: Partial<ClaudeCodeAdapterDeps> = {
 
     loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession> {
       return loadSession(descriptor);
+    },
+
+    searchRoots(): string[] {
+      return claudeSearchRoots(env, deps.homeDir ?? homedir());
+    },
+
+    findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
+      return findSessions(root, query);
+    },
+
+    describeSession(filePath: string): Promise<SessionDescriptor> {
+      return describeSession(filePath);
+    },
+
+    resumeCommand(input): string {
+      const argv = ["claude", "--resume", input.sessionId];
+      if (input.prompt !== null && input.prompt !== "") argv.push(input.prompt);
+      return resumeCommandLine({
+        directory: input.directory,
+        argv,
+        env:
+          input.home === capabilities.defaultHome
+            ? null
+            : { name: CONFIG_DIR_ENV, value: input.home },
+      });
     },
 
     serialize(

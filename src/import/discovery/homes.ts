@@ -10,7 +10,15 @@ import type { AgentAdapter, AgentId, HomePath, ImportConfig, SearchScope } from 
  * The source-role subset of `AgentAdapter` this module uses. The target-role methods
  * exist on the port but are never called here (module.md, Public Contract).
  */
-export type SourceAdapter = Pick<AgentAdapter, "capabilities" | "listSessions" | "loadSession">;
+export type SourceAdapter = Pick<
+  AgentAdapter,
+  | "capabilities"
+  | "listSessions"
+  | "loadSession"
+  | "searchRoots"
+  | "findSessions"
+  | "describeSession"
+>;
 
 /** One home to search, with the adapter that can read it. */
 export interface SearchTarget {

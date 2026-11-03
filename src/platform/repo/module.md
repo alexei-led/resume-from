@@ -21,6 +21,10 @@ session, which needs the commit distance.
 - Report how far HEAD is from a given commit, in commits ahead and behind (FR-37, FR-38).
 - Report "not known" rather than guessing when the working directory is not a repository, when the
   repository has no commits, or when the source commit is absent from this repository.
+- Resolve a session's recorded directory into a place: present, recoverable through a parent
+  repository, or unrecoverable (FR-61).
+- Plan a worktree recovery in a fixed order of fallbacks, and execute only that plan with the same
+  Git environment, timeout and cancellation rules as every other command here.
 
 ## Subdomain Classification
 
@@ -92,6 +96,71 @@ interface RepoReader {
 }
 ```
 
+```ts
+/** Where the recorded directory of a session is (FR-61). */
+type PlaceState = "present" | "recoverable" | "unrecoverable";
+
+/** What a session recorded about where it ran. */
+interface PlaceRequest {
+  /** The recorded directory: `startDirectory ?? repoPath`. */
+  directory: string;
+  branch: string | null;
+  commit: string | null;
+}
+
+/** One git command a recovery would run, with its display form. */
+interface RecoveryCommand {
+  cwd: string;
+  /** Arguments after `git -C <cwd>`, each separate. */
+  argv: string[];
+  /** The POSIX display form the user is shown. */
+  display: string;
+}
+
+/** How a missing directory would be recreated (FR-61). */
+interface RecoverySteps {
+  repoRoot: string;
+  directory: string;
+  /** In order; a prune precedes the add when the directory is a stale registration. */
+  commands: RecoveryCommand[];
+  warnings: string[];
+  /** A note about the chosen branch or commit, when one applies. */
+  note: string | null;
+}
+
+/** Where a session's directory is, and what it would take to bring it back. */
+interface Place {
+  state: PlaceState;
+  directory: string;
+  /** The checkout's current branch when the directory is present. */
+  branch: string | null;
+  warnings: string[];
+  /** Set only when recoverable. */
+  recovery: RecoverySteps | null;
+  /** Why the directory cannot be recovered, when unrecoverable. */
+  reason: string | null;
+}
+
+/** What running a recovery plan produced. */
+interface RecoveryResult {
+  ok: boolean;
+  /** The display form of the command that failed, when one did. */
+  failedCommand: string | null;
+  stdout: string;
+  stderr: string;
+  /** git's own message, or the refusal reason. */
+  message: string | null;
+}
+
+/** Resolves a session's place and runs its recovery plan. It never forces, fetches or deletes. */
+interface WorktreeRecovery {
+  /** Throws AbortError with the signal reason as cause when cancelled; performs no I/O. */
+  checkCancellation(): void;
+  place(request: PlaceRequest): Promise<Place>;
+  recover(plan: RecoverySteps): Promise<RecoveryResult>;
+}
+```
+
 ## Integrations
 
 **None.** This module depends on no other module. `src/import/discovery/` and
@@ -110,9 +179,12 @@ Changes that require **only this module** to change:
 
 - **Every lookup names its directory explicitly.** `distanceFrom(cwd, sourceCommit)` compares against that directory’s HEAD. `createRepoReader` takes process options only, with no ambient or factory-bound cwd.
 
-- **This module never writes to the repository.** No commit, no checkout, no stash, no index change,
-  no configuration write. It is read-only against the user's work (AC-4 in spirit: the tool touches
-  nothing the user owns).
+- **The reader never writes to the repository.** No commit, no checkout, no stash, no index change,
+  no configuration write. It is read-only against the user's work (AC-4 in spirit).
+- **A recovery executes only the plan it produced.** The plan may add one worktree into a directory
+  that does not exist, and prune a stale registration of that same directory. It never fetches,
+  forces, deletes, checks out an existing tree, or writes configuration; an existing path is
+  refused before any command runs, and every command is an argument array, never a shell string.
 - **Expected absences are return values.** Missing paths and completed nonzero identity queries
   return an unresolved identity (`root`, `commonDir`, `head`, `branch` null; `isBare` false).
   HEAD/branch queries may independently be unresolved without losing repository identity. Git
@@ -252,6 +324,24 @@ user's repository.
   overrides; never infer identity from a missing path's parent; leave nonzero lookups unresolved
   without classifying stderr; propagate operational errors and cancellation.
 
+**T-REP-22 — a place is present, recoverable or unrecoverable** (`worktree.test.ts`)
+- Scenario: an existing checkout on the recorded branch and on a different branch; a missing
+  directory below each known worktree layout; a missing directory with no matching repository.
+- Expected behavior: present reports the branch and warns on a difference; recoverable carries a
+  plan; unrecoverable names the directory and why (FR-62).
+
+**T-REP-23 — the recovery order is fixed** (`worktree.test.ts`)
+- Scenario: a local branch, an `origin/<branch>` only, a recorded commit with no branch, and
+  neither; with a stale registration of the same directory.
+- Expected behavior: the plan is local branch, then `--track -b`, then `--detach <commit>`, then
+  `--detach HEAD` with a warning; a prune precedes the add when the registration is prunable. Each
+  plan executes in a real temporary repository (FR-63).
+
+**T-REP-24 — a recovery never damages what exists** (`worktree.test.ts`)
+- Scenario: a plan whose directory exists; a plan containing a command other than `worktree add`
+  or `prune`; a git command that fails.
+- Expected behavior: an existing path and a forbidden command are refused before git runs, and a
+  failure reports git's own message and stops (FR-63).
 
 ### Cancellation error contract
 
