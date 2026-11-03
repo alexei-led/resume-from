@@ -445,7 +445,9 @@ describe("T-ROO-7 — the module graph is acyclic and layered", () => {
         // submodule using the parent's shared implementation (for example the adapters' one
         // redaction rule), is Internal Design rather than a cross-module import. A cycle cannot
         // hide here: the acyclicity test above walks the whole graph, parent edges included.
-        if (isInside(edge.from, edge.to)) return false;
+        // The root is not such a parent: a file under src/ is a module of its own, so an import
+        // of it from any submodule is a cross-module import and must still be a contract.
+        if (edge.to !== SRC_DIR && isInside(edge.from, edge.to)) return false;
         if (!edge.specifier.endsWith("/index.js")) return true;
         // The composition root builds what the design says it constructs
         // (docs/tech-stack.md, Isolation).
