@@ -105,6 +105,7 @@ interface PipelineStub {
   }[];
   locateCalls: unknown[];
   switchCalls: SessionDescriptor[];
+  recoverCalls: { descriptor: SessionDescriptor; place: Place; token: string }[];
   order: string[];
 }
 
@@ -139,6 +140,8 @@ function stubPipeline(
     destination?: ImportDestination;
     recovery?: RecoveryResult;
     recoveryToken?: string | null;
+    /** What `place` returns after a successful recovery (the first call returns `place`). */
+    placeAfterRecovery?: Place;
     context?: string[];
     switchOutcome?: SwitchOutcome;
     onCommit?: (request: ImportRequest, runtime: AgentRuntime, confirmationToken: string) => void;
@@ -150,6 +153,7 @@ function stubPipeline(
     commitCalls: [],
     locateCalls: [],
     switchCalls: [],
+    recoverCalls: [],
     order: [],
     pipeline: {
       async list(request) {
@@ -175,7 +179,8 @@ function stubPipeline(
       },
       async place() {
         stub.order.push("place");
-        return opts.place ?? present();
+        const first = stub.order.filter((name) => name === "place").length === 1;
+        return (first ? undefined : opts.placeAfterRecovery) ?? opts.place ?? present();
       },
       summary(descriptor, targetPlace) {
         return [
@@ -186,8 +191,9 @@ function stubPipeline(
       recoveryToken() {
         return opts.recoveryToken ?? null;
       },
-      async recover() {
+      async recover(descriptor, place, token) {
         stub.order.push("recover");
+        stub.recoverCalls.push({ descriptor, place, token });
         return (
           opts.recovery ?? {
             ok: false,
@@ -487,6 +493,120 @@ describe("T-PIX-5b — native and cross-directory restore", () => {
 
     expect(commitCalls[0]?.request.destinationCwd).toBe("/elsewhere");
     expect(commitCalls[0]?.runtime).toBeNull();
+  });
+});
+
+describe("T-PIX-5c — recovery gates the restore", () => {
+  const TOKEN = `v1-sha256-${"a".repeat(64)}`;
+  const gone = descriptor({
+    ref: { agent: "pi", home: "/Users/me/.pi", id: "pi-1" },
+    filePath: "/Users/me/.pi/sessions/--gone--/100_pi-1.jsonl",
+    startDirectory: "/gone/repo",
+  });
+  function recoverable(): Place {
+    return present({
+      state: "recoverable",
+      directory: "/gone/repo",
+      branch: "main",
+      recovery: {
+        directory: "/gone/repo",
+        commands: [
+          {
+            cwd: "/repo",
+            argv: ["worktree", "add", "/gone/repo", "main"],
+            display: "git -C /repo worktree add /gone/repo main",
+          },
+        ],
+        warnings: [],
+      },
+    });
+  }
+
+  it("names an unrecoverable directory and offers no Resume", async () => {
+    const { pipeline, previewCalls, switchCalls } = stubPipeline({
+      located: gone,
+      place: present({
+        state: "unrecoverable",
+        directory: "/gone/repo",
+        branch: "main",
+        recovery: null,
+        reason: "no repository was found for /gone/repo",
+      }),
+    });
+    const ui = stubUi();
+    const { ctx } = stubContext();
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    const text = ui.blocks.flat().join("\n");
+    expect(text).toContain("cannot be recovered");
+    expect(text).toContain("no repository was found for /gone/repo");
+    expect(text).not.toContain("Resume:");
+    expect(ui.asked).toHaveLength(0);
+    expect(previewCalls).toHaveLength(0);
+    expect(switchCalls).toHaveLength(0);
+  });
+
+  it("passes the shown token to recover, then continues to the switch", async () => {
+    const { pipeline, recoverCalls, switchCalls } = stubPipeline({
+      located: gone,
+      place: recoverable(),
+      recoveryToken: TOKEN,
+      recovery: { ok: true, stderr: "", message: null },
+      placeAfterRecovery: present({ directory: "/repo" }),
+    });
+    const ui = stubUi(["selected"]);
+    const { ctx } = stubContext({ cwd: "/repo" });
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(ui.asked[0]).toContain("Recreate");
+    expect(recoverCalls).toHaveLength(1);
+    expect(recoverCalls[0]?.token).toBe(TOKEN);
+    expect(switchCalls).toEqual([gone]);
+  });
+
+  it("runs nothing when the recovery is declined", async () => {
+    const { pipeline, recoverCalls, previewCalls, commitCalls } = stubPipeline({
+      located: gone,
+      place: recoverable(),
+      recoveryToken: TOKEN,
+    });
+    const ui = stubUi(["cancelled"]);
+    const { ctx } = stubContext();
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(recoverCalls).toHaveLength(0);
+    expect(previewCalls).toHaveLength(0);
+    expect(commitCalls).toHaveLength(0);
+    expect(ui.blocks.flat().join("\n")).toContain("Cancelled. Nothing was imported.");
+  });
+
+  it("stops before the import when the recovery fails", async () => {
+    const { pipeline, recoverCalls, previewCalls, commitCalls } = stubPipeline({
+      located: gone,
+      place: recoverable(),
+      recoveryToken: TOKEN,
+      recovery: { ok: false, stderr: "", message: "the worktree add failed" },
+    });
+    const ui = stubUi(["selected"]);
+    const { ctx } = stubContext();
+
+    await createResumeFromCommand(
+      deps({ picker: stubPicker({ choice: "cancelled", selected: null }).picker, ui: ui.ui }),
+    ).run(ctx, ["pi-1"], pipeline);
+
+    expect(recoverCalls).toHaveLength(1);
+    expect(previewCalls).toHaveLength(0);
+    expect(commitCalls).toHaveLength(0);
+    expect(ui.blocks.flat().join("\n")).toContain("the worktree add failed");
   });
 });
 
