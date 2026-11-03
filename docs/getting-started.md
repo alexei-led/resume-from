@@ -1,8 +1,8 @@
-# Install and run the first transfer
+# Install and run the first restore
 
-Install `resume-from` in the agent that will receive the imported session. Then run it from the Git repository that owns the source session.
+Install `resume-from` in the agent that will restore or receive the session.
 
-## 1. Choose the destination
+## 1. Install
 
 ### Pi
 
@@ -30,83 +30,57 @@ codex plugin add resume-from@alexei-led-resume-from
 
 The Codex prompt uses a pinned package through `npx`. Its first use needs access to the npm registry.
 
-## 2. Open the repository in the destination agent
-
-Start the destination agent in the directory whose files you intend to edit, including a checkout subdirectory. It may be the source checkout or another linked worktree of the same Git repository, whether nested, sibling, or at an arbitrary external location. Choose the destination model, provider, and profile before importing. Conversation import does not transfer uncommitted work, switch branches, or recreate removed worktrees. See [worktree limitations](workflows.md#continue-in-another-worktree).
-
-Session discovery is repository-scoped. A known session ID or file path still has to belong to the current repository.
-
-## 3. Preview and import
-
-### Pi workflow
-
-1. Run `/resume-from`.
-2. Select a source session in Pi's native picker.
-3. Read the preview.
-4. Confirm the import.
-
-Pi creates and opens the new session in the current process. It leaves the prompt empty.
-
-### Claude Code and Codex workflow
-
-1. Run `/resume-from` to list matching sessions.
-2. Run `/resume-from <row>` to preview one session.
-3. Run the token-bearing `/resume-from <row> --confirm <token>` command printed by the preview.
-4. Run the native landing command printed by the tool.
-
-Claude Code prints:
-
-```sh
-claude --resume <session-id>
-```
-
-Codex prints:
-
-```sh
-codex resume <thread-id>
-```
-
-## Select a known session
-
-The command accepts one row number, session ID, or session file path.
+## 2. Restore by ID
 
 ```text
-# Pi
 /resume-from <session-id>
-/resume-from /absolute/path/to/session.jsonl
 ```
 
-Claude Code and Codex also support source filters:
+The lookup is global: it is not filtered by the current repository, so a session recorded in a
+removed worktree is still found. Matching is case-insensitive. An exact ID wins; a prefix of at least
+six characters selects the session when exactly one matches, and several matches are listed as
+candidates. You can also pass a session file path or a row number from the list.
+
+The tool prints a two-line summary, any warnings, and then:
+
+- `Resume:` — run this when the agent is the same. Nothing was written.
+- `Confirm:` — re-run this exact command to import, or to run a shown worktree recovery.
+
+Same agent: run `Resume:`. Another agent: confirm the import; the new native session starts with the
+three-line recovery summary.
+
+## 3. Options
 
 ```text
-# Claude Code / Codex
-/resume-from --agent pi
-/resume-from --agent claude --home ~/.claude-team
+/resume-from <id> --to <existing-checkout>     # import into another checkout of the same repository
+/resume-from <id> --prompt "continue the refactor"
+/resume-from <id> --context                    # read-only: print the conversation an import would keep
 ```
 
-Pi uses its native picker for discovery and accepts a session ID or path directly.
+A missing recorded directory is recovered only after the printed `Confirm:` token. The tool will
+recreate the worktree at the recorded branch, `origin/<branch>`, the recorded commit, or the
+repository HEAD, in that order.
 
-## Check the preview
+## 4. Check the preview
 
-Before confirmation, verify:
+Before confirming an import, verify:
 
-- Source agent, profile, session, repository, and commit warning.
-- Canonical `Destination:` directory and any recorded-directory warning. Confirm in this same directory and use it for the native resume command.
+- Source agent, profile, session, directory, branch, and any state warning.
 - Kept and dropped turn counts.
 - Tool-result bodies removed.
 - Estimated tokens and target budget.
-- Changed-file paths.
 
-Nothing has been written at this point. A blocked preview cannot be confirmed.
+Nothing has been written at this point. A blocked preview cannot be confirmed, and a recovery token
+from another directory cannot be reused.
 
 ## Confirm success
 
 A successful transfer has these properties:
 
 - The source session is unchanged.
-- A new target-native session exists.
+- A new target-native session exists, or the native resume command printed the original one.
 - The target can open and read the new session.
 - The imported session shows its source and what was dropped.
 - Tool activity is plain text, not replayable calls.
 
-Use `/resume-from --help` for the exact selectors and filters available in the current host.
+Use `/resume-from --help` for the exact selectors and options available in the current host.

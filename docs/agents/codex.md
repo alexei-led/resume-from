@@ -1,7 +1,7 @@
 # Codex guide
 
-The Codex plugin adds a `/resume-from` prompt. The prompt runs the matching
-published command package.
+The Codex plugin adds a `/resume-from` prompt. The prompt runs the matching published command
+package.
 
 ## Install
 
@@ -10,56 +10,61 @@ codex plugin marketplace add alexei-led/resume-from
 codex plugin add resume-from@alexei-led-resume-from
 ```
 
-Use Codex CLI or the Codex desktop application. The Codex IDE extension does not
-install plugins.
+Use Codex CLI or the Codex desktop application. The Codex IDE extension does not install plugins.
 
 ## Network requirement
 
-The prompt runs a pinned `resume-from` version through `npx --yes`. The first
-use needs access to the npm registry. Later use can use the local npm cache.
+The prompt runs a pinned `resume-from` version through `npx --yes`. The first use needs access to the
+npm registry. Later use can use the local npm cache.
 
-## Import a session
+## Restore a session
 
-1. Run `/resume-from`.
-2. Read the numbered list.
-3. Run `/resume-from <row>`.
-4. Read the preview.
-5. Run the token-bearing `/resume-from <row> --confirm <token>` command printed by the preview.
+```text
+/resume-from <id>
+```
 
-Codex cannot move the current process into the new thread. The command prints
-the new thread ID and the native resume command.
+The lookup is global. An exact ID wins; a prefix of at least six characters selects the session when
+exactly one matches; several matches are listed as candidates. A file path and a row number are also
+accepted.
+
+When the session belongs to Codex, the tool prints its native command and writes nothing:
 
 ```sh
 codex resume <thread-id>
 ```
 
-Run that command in a terminal.
+When the session belongs to another agent, or `--to <dir>` is given, the tool shows an import preview
+and the exact `Confirm:` command. After the import it prints `Resume:` for the new thread.
 
-## Filter the source list
+A missing recorded directory is shown first as `Recover:` git commands, gated by the same
+`Confirm:` token. Nothing is recreated without it.
 
-List sessions from one agent:
+## Marker
 
-```text
-/resume-from claude
-/resume-from pi
-/resume-from codex
-```
-
-List sessions from one home:
+Codex has no verified entry that renders arbitrary gray text on resume, so the three-line summary is
+printed in the command output only:
 
 ```text
-/resume-from --agent codex --home ~/.codex-work
+↻ Restored from claude-code dc601a22 (~/.claude) · 2026-11-03 10:04Z
+  ~/work/app · master
+  4 turns kept · Dropped on import: 2 tool result bodies.
 ```
 
-Use `--help` to show all selectors and options.
+## Options
 
 ```text
-/resume-from --help
+/resume-from <id> --to <existing-checkout>
+/resume-from <id> --prompt "continue the refactor"
+/resume-from <id> --context
 ```
+
+`--context` is read-only and prints the conversation an import into Codex would keep. `--agent` and
+`--home` narrow the list and the lookup but are not needed to find a session by ID.
 
 ## Use another Codex home
 
-Codex reads `CODEX_HOME`. The default home is `~/.codex`.
+Codex reads `CODEX_HOME`. The default home is `~/.codex`. Global lookup already searches `~/.codex*`
+and `$CODEX_HOME`, including archived sessions from the last 14 days.
 
 Start Codex with another target home:
 

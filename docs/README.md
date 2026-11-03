@@ -4,9 +4,9 @@ Choose the shortest guide for the task in front of you.
 
 ## Start and use `resume-from`
 
-- [Install and run the first transfer](getting-started.md)
+- [Install and run the first restore](getting-started.md)
 - [Common workflows and limitations](workflows.md)
-- [How session transfer works](how-it-works.md)
+- [How session restore works](how-it-works.md)
 
 ## Install in a specific target agent
 
@@ -14,7 +14,7 @@ Choose the shortest guide for the task in front of you.
 - [Claude Code](agents/claude-code.md)
 - [Codex](agents/codex.md)
 
-The target-agent guide owns installation and landing instructions. The shared getting-started guide owns the cross-agent workflow.
+The target-agent guide owns installation and landing instructions. The shared getting-started guide owns the cross-agent restore workflow.
 
 ## Configure and troubleshoot
 

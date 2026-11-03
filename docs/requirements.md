@@ -504,6 +504,26 @@ or writes into an existing path; a failed command reports git's own message and 
 **FR-64** — A native resume command is absolute, POSIX-quoted only where needed, and names the
 agent's home variable only when the home is not that agent's default.
 
+**FR-65** — A bare shell (no `--target-agent`) and a plugin whose source agent equals the target
+without `--to` print the source agent's native resume command and write nothing. A different agent,
+or `--to <dir>`, imports with the destination at the session's recorded directory or the override.
+`--to` must name an existing checkout of the same repository while the recorded directory exists;
+when that directory is missing and unrecoverable, any existing checkout is allowed with a warning.
+`--prompt <text>` appends the text, shell-quoted, as the initial prompt of the native resume command.
+`--context` is read-only: it prints the summary and the budgeted conversation an import into the
+current agent would keep, then a final `Directory: <dir>` line. Pi switches in process to the
+original session when a native restore targets Pi's current directory; otherwise it shows the
+command.
+
+**FR-66** — Restore output uses stable labels: `Resume:`, `Recover:`, `Confirm:` and `Directory:`.
+Native output starts with two summary lines naming the agent, id prefix, home, time, title,
+directory, branch, and any state note. An import landing prints a three-line provenance summary:
+where it came from, where it now lives, and the kept and dropped counts. Claude Code stores that
+summary in one `system` entry (subtype `informational`, level `info`, `isMeta` false), rendered gray;
+Pi stores one `custom` entry rendered dim, with the collapsed view showing its first line; Codex
+prints it. Imported Claude Code assistant turns declare the model `<synthetic>` so a resume shows no
+restore notice. Displayed text is sanitised.
+
 ---
 
 ## Non-goals

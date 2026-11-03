@@ -3,6 +3,19 @@
 `resume-from` works without a configuration file. If you need another agent home
 or token budget, create the file.
 
+## Search roots
+
+An ID lookup searches these roots without configuration:
+
+| Agent | Roots |
+| --- | --- |
+| Claude Code | `~/.claude*/projects` and `$CLAUDE_CONFIG_DIR/projects` |
+| Codex | `~/.codex*/sessions`, `~/.codex*/archived_sessions` (last 14 days), and `$CODEX_HOME/...` |
+| Pi | `~/.pi/agent/*sessions*`, `$PI_CODING_AGENT_DIR/sessions`, and `$PI_CODING_AGENT_SESSION_DIR` |
+
+The repository list adds configured `extraHomes` to the same roots. An ID, prefix, or file path
+lookup searches the roots globally; `--agent` and `--home` narrow it when given.
+
 ## File location
 
 The default file is:
@@ -29,7 +42,8 @@ The file must contain valid JSON. Comments are not valid in this file.
 
 ## Fields
 
-- `extraHomes` defaults to `[]`. It adds agent and home pairs to the search.
+- `extraHomes` defaults to `[]`. It adds agent and home pairs to the search, on top of the
+  default roots above.
 - `budgetShare` defaults to `0.3`. It must be greater than `0` and at most `1`.
 - `pinnedRecentTurns` defaults to `5`. It must be a whole number of `0` or more.
 - `windowOverrides` defaults to `[]`. It replaces a default context-window size.
@@ -38,13 +52,15 @@ Valid agent names are `pi`, `codex`, and `claude-code`.
 
 ## Add another profile
 
-For a one-off import in Claude Code or Codex, name the source profile home directly:
+For a one-off lookup in Claude Code or Codex, narrow it with the source home:
 
 ```text
-/resume-from claude --home ~/.claude-team
+/resume-from --home ~/.claude-team <id>
 ```
 
-`--home` selects a source profile; it does not change the destination profile or checkout. The same repository membership check applies across profiles and linked worktrees. In Pi, or for a profile you import from often, add it to `extraHomes`.
+`--home` selects a source profile; it does not change the destination profile or checkout. It is not
+needed to find a session by ID, because the default roots are searched anyway. For a profile you use
+often, add it to `extraHomes`.
 
 ```json
 {

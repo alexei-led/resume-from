@@ -1,39 +1,45 @@
 # Common workflows and limitations
 
-`resume-from` creates a new native session in the destination agent. It transfers conversation context, not the repository, credentials, or a running process.
+`resume-from` restores a saved session: same agent → its own native resume command; different agent
+→ a new native session with the conversation converted. It transfers conversation context, not the
+repository, credentials, or a running process.
 
-## Switch to another model or provider
+## Restore a session from its ID
 
-1. Start the destination agent with the model and provider you want.
-2. Open the same Git repository.
-3. Run `/resume-from` and import the source session.
+```text
+/resume-from <id-or-prefix>
+```
+
+Lookup is global across every known agent home. The agent, profile home, directory, branch and
+commit are taken from the session record, not from the current directory. An exact ID wins; a prefix
+of at least six characters selects the session when exactly one matches; several matches are listed
+as candidates.
+
+The summary names the session and where it lives:
+
+```text
+↻ claude-code dc601a22 · ~/.claude · 2026-11-03 10:04Z · fix the parser crash
+  ~/.local/share/chezmoi · master
+```
+
+Then the tool prints `Resume:` (same agent) or an import preview ending in `Confirm:` (different
+agent, or `--to`). Follow that line; it is the exact command to run.
+
+## Switch to another model, provider, or harness
+
+1. Start the destination agent with the model, provider, and profile you want.
+2. Run `/resume-from <id>`.
+3. Confirm the import and run the printed `Resume:` command.
 
 The destination controls the active model. `resume-from` does not select or copy model credentials.
-
-This works between different agents and between two profiles of the same agent.
-
-## Switch harnesses and toolsets
-
-Use this when the repository and task remain the same but you want another terminal interface, permission model, extension set, or collection of tools.
-
-Examples:
-
-- Pi to Claude Code for a different tool harness.
-- Claude Code to Codex for another model or workflow.
-- Codex to Pi for Pi extensions and native session controls.
-
-Tool calls from the source become plain text. The destination does not inherit executable tool state and can inspect the current repository before acting.
+Tool calls from the source become plain text, so the destination does not inherit executable tool
+state and can inspect the current repository before acting.
 
 ## Continue after a usage limit
 
-If one provider, account, or tool reaches a rate or usage limit:
-
-1. Leave the source session saved.
-2. Start another supported agent or profile in the same repository.
-3. Import the saved session.
-4. Continue from the new native session.
-
-`resume-from` does not bypass a provider limit. It makes the saved task context available to another destination that you can already use.
+Leave the source session saved, start another supported agent or profile, restore by ID, and continue
+from the new native session. `resume-from` does not bypass a provider limit; it makes the saved task
+context available to a destination you can already use.
 
 ## Move between profiles
 
@@ -45,71 +51,63 @@ The destination profile is the profile used by the running target agent:
 | Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` |
 | Codex | `CODEX_HOME` | `~/.codex` |
 
-To search additional source profiles, add them to `extraHomes` in the shared [configuration](configuration.md).
+Global ID lookup already searches the default roots and the environment home of each agent. To search
+an additional source home, add it to `extraHomes` in the shared [configuration](configuration.md).
+`--home` narrows one lookup; it is not needed to find a session by ID.
 
-Example:
+## Recover a missing worktree
 
-```json
-{
-  "extraHomes": [
-    { "agent": "claude-code", "home": "~/.claude-team" },
-    { "agent": "pi", "home": "~/.pi/work-agent" }
-  ]
-}
-```
-
-For a one-off source profile in Claude Code or Codex, run:
+The recorded directory may have been removed with its worktree. The tool looks for a parent
+repository in the usual layouts (`<repo>.worktrees/<name>`, `<repo>/.worktrees/<name>`,
+`<repo>/.claude/worktrees/<name>`) and shows the exact recovery commands:
 
 ```text
-/resume-from claude --home ~/.claude-team
-/resume-from claude 1 --home ~/.claude-team
+Recover: git -C /repo worktree add /repo.worktrees/task task
+Confirm: /resume-from dc601a22 --confirm v1-sha256-…
 ```
 
-The first command lists; the second previews. Confirm only with the exact token-bearing command printed by the preview. `--home` selects the source, not the destination profile or checkout, and does not bypass repository membership. Pi uses `extraHomes` and its picker instead of these CLI filters.
+Recovery runs only with that token, and only after the plan is shown. The commands are chosen in this
+order: the recorded local branch, the recorded `origin/<branch>`, the recorded commit, then the
+repository's HEAD with a warning. A stale registration is pruned first. Recovery never fetches,
+forces, deletes, or writes into an existing path.
 
-## Continue in another worktree
+After a successful recovery the same invocation continues: native `Resume:` or an import preview.
 
-Start the destination agent in the directory whose files you intend to edit. That may be the main checkout, a linked worktree, or a subdirectory of either. Linked worktrees match using their canonical Git common directory regardless of placement: nested (such as `.worktrees/task`), sibling, or an arbitrary external directory. Main-to-worktree, worktree-to-main, and sibling-worktree transfers all use the same rule for lists, rows, session IDs, and file paths, including alternate source profiles.
+## Import into another checkout
 
-Independent clones do not qualify, even with the same remote or shared Git objects. Submodules and nested independent repositories remain separate. A bare repository itself cannot receive an import; start the agent in one of its linked working trees.
+`--to <dir>` imports into an existing checkout instead of the session's recorded directory. It must
+belong to the same repository, proven by the canonical Git common directory. Independent clones,
+submodules, and nested independent repositories do not qualify. A bare repository cannot be a
+destination.
 
-Read `Destination:` in the preview. It shows the canonical destination; native imports retain the directory supplied by the destination agent, including a subdirectory or symlink spelling. A directory-difference warning can also reflect two subdirectories, not necessarily different checkouts. Conversation import does not transfer uncommitted work, switch branches, or recreate removed worktrees. Inspect the destination's files before continuing the task.
+When the recorded directory is missing and cannot be recovered, `--to` may name any existing Git
+checkout, with a warning. The import never moves a session into a different repository behind your
+back.
 
-Keep preview and confirmation in the same destination directory. A token from one worktree cannot confirm an import in another, even at the same HEAD. If the directory, source, or repository evidence changes, preview again. In Claude Code or Codex, run the printed native resume command from that destination directory with the same target profile; Pi confirms and switches in process.
+## Continue in place from instructions
 
-### Missing or moved worktrees
-
-A session whose first recorded directory has disappeared can still be found if another recorded active-conversation directory identifies this repository. A Git-moved worktree works when a recorded path resolves at its new location. Missing historical paths alone cannot establish membership; the importer does not walk to an existing parent, consult a worktree registry for recovery, or remap paths. If a session records two resolved unrelated repositories, it is excluded with an ambiguity diagnostic. Current paths cannot prove historical ownership when an old path has been reused.
+`--context` is read-only. It prints the summary and the conversation an import into the current agent
+would keep, then `Directory: <dir>`. The skill uses it when it cannot open a new terminal: it changes
+to that directory and carries out your instructions in the current session.
 
 ## Start a fresh context without losing the task
 
-The importer budgets history against the destination context window. By default it may use 30% of that window.
+The importer budgets history against the destination context window. By default it may use 30% of
+that window. It pins the first user request, the configured number of recent turns, compaction
+summaries, and mutating tool records used to derive changed-file paths.
 
-It pins:
-
-- The first user request.
-- The configured number of recent turns.
-- Compaction summaries.
-- Mutating tool records used to derive changed-file paths.
-
-If the full history does not fit, it drops the oldest unpinned turns and reports them in the preview. If pinned content alone does not fit, it blocks before writing.
-
-This is a controlled handoff, not guaranteed full-history preservation.
-
-## Create an independent review copy
-
-Importing never replaces the source session. You can create a destination-side copy for review or experimentation, then return to the original session later.
-
-The two sessions do not synchronize after import. New messages and tool activity remain local to the session where they occur.
+If the full history does not fit, it drops the oldest unpinned turns and reports them in the preview.
+If pinned content alone does not fit, it blocks before writing.
 
 ## Current limits
 
 - Supported agents are Pi, Claude Code, and Codex.
-- Discovery only lists sessions that record the current Git repository.
-- Sessions without repository metadata are reported but cannot be selected.
-- Selection by file path does not bypass repository scope.
-- Repository files and uncommitted changes are not copied. The destination needs its own accessible checkout; imports neither switch branches nor recreate worktrees.
-- Credentials, model selection, hidden reasoning, system prompts, environment data, telemetry, and vendor runtime state do not transfer.
+- The repository list is filtered by the current repository; an ID, prefix, or file path is not.
+- Imports must stay in the session's repository, except when its recorded directory is gone.
+- Repository files and uncommitted changes are not copied. Imports neither switch branches nor
+  transfer a running process; a missing worktree is recreated only after confirmation.
+- Credentials, model selection, hidden reasoning, system prompts, environment data, telemetry, and
+  vendor runtime state do not transfer.
 - Tool-result bodies do not transfer.
 - Pi can switch in process. Claude Code and Codex require the printed native resume command.
 - The Codex plugin's first run needs npm access unless its pinned package is already cached.
