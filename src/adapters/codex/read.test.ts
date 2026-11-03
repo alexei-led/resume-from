@@ -811,7 +811,12 @@ describe("T-COD-14 truncated or unknown-typed threads", () => {
   it("rejects loadSession for a thread cut mid-entry", async () => {
     const home = tempHome();
     writeRollout(home, id, whole, undefined, (text) => text.slice(0, text.length - 30));
-    await expect(adapter.loadSession(await loadOnly(home))).rejects.toThrow(/unreadable/i);
+    const descriptor = await loadOnly(home);
+    // The session_meta header is the first line, so the cut does not lose the directory:
+    // a native restore can still place the thread, while the loader refuses an import.
+    expect(descriptor.repoPaths).toEqual(["/repo/demo"]);
+    expect(descriptor.startDirectory).toBe("/repo/demo");
+    await expect(adapter.loadSession(descriptor)).rejects.toThrow(/unreadable/i);
   });
 
   it("leaves a thread it cannot read at all out of the listing", async () => {

@@ -370,13 +370,18 @@ test("CLI --to imports into the named checkout without recreating the recorded d
   expect(await snapshot(scene.linked)).toEqual({});
 });
 
+/** Cut the last line in half, as a crashed agent leaves it. */
+async function cutLastLine(file: string): Promise<void> {
+  const lines = (await readFile(file, "utf8")).trimEnd().split("\n");
+  const last = lines[lines.length - 1] ?? "";
+  lines[lines.length - 1] = last.slice(0, Math.floor(last.length / 2));
+  await writeFile(file, `${lines.join("\n")}\n`);
+}
+
 test("CLI resumes natively from a session whose last line was cut mid-write", async () => {
   const scene = await bench("sibling-to-external");
   // A crashed agent leaves a complete conversation with an incomplete trailing entry.
-  const lines = (await readFile(scene.file, "utf8")).trimEnd().split("\n");
-  const last = lines[lines.length - 1] ?? "";
-  lines[lines.length - 1] = last.slice(0, Math.floor(last.length / 2));
-  await writeFile(scene.file, `${lines.join("\n")}\n`);
+  await cutLastLine(scene.file);
 
   const outcome = await scene.run([scene.id]);
 
@@ -385,6 +390,35 @@ test("CLI resumes natively from a session whose last line was cut mid-write", as
   const shown = outcome.stdout.join("\n");
   expect(shown).toContain("Resume: cd ");
   expect(shown).toContain(` && claude --resume ${scene.id}`);
+});
+
+test("CLI plans the removal recovery of a session whose last line was cut mid-write", async () => {
+  const scene = await bench("main-to-nested");
+  await scene.transcript([scene.linked, scene.linked]);
+  git(scene.main, "worktree", "remove", "--force", scene.linked);
+  await cutLastLine(scene.file);
+
+  const outcome = await scene.run([scene.id]);
+
+  expect(outcome.exitCode).toBe(0);
+  expect(outcome.stderr).toEqual([]);
+  const shown = outcome.stdout.join("\n");
+  // The complete entries before the cut still place the session: the removed worktree is
+  // offered for recovery instead of being reported as a session with no directory.
+  expect(shown).not.toContain("records no directory");
+  expect(shown).toContain("Recover:");
+  expect(shown).toContain("Confirm:");
+});
+
+test("CLI refuses to import a session whose last line was cut mid-write", async () => {
+  const scene = await bench("sibling-to-external", "codex");
+  await cutLastLine(scene.file);
+
+  const outcome = await scene.run([scene.id]);
+
+  expect(outcome.exitCode).toBe(2);
+  expect(outcome.stderr.join("\n")).toContain("unreadable Claude Code session file");
+  expect(await snapshot(scene.targetHome)).toEqual({});
 });
 
 test("CLI names an unrecoverable directory and exits 1", async () => {

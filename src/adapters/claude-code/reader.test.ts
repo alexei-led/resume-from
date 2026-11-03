@@ -374,8 +374,25 @@ describe("T-CC-15 — a truncated or unknown-typed session", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]?.title).toBe(UNREADABLE_TITLE);
     expect(listed[0]?.turnCount).toBe(0);
+    // The complete entries before the cut still place the session, so a native restore works.
+    expect(listed[0]?.repoPath).toBe(REPO);
+    expect(listed[0]?.repoPaths).toEqual([REPO]);
+    expect(listed[0]?.startDirectory).toBe(REPO);
 
+    // The strict loader still refuses, so an import is never built from a shortened file.
     await expect(adapter.loadSession(listed[0] as never)).rejects.toThrow(/cut-1\.jsonl/);
+  });
+
+  it("keeps the directory and branch facts of the entries before the cut", () => {
+    const text = textOf(referenceEntries(CTX, "short body"));
+    const read = readSessionText(text.slice(0, text.length - 12));
+
+    expect(read.unreadable).toMatch(/not a complete entry/);
+    expect(read.turns).toEqual([]);
+    expect(read.repoPath).toBe(REPO);
+    expect(read.repoPaths).toEqual([REPO]);
+    expect(read.startDirectory).toBe(REPO);
+    expect(read.branch).toBe(CTX.gitBranch);
   });
 
   it("loads what it understands from unknown entry types and reports the skipped ones", () => {

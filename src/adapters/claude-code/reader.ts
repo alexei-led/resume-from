@@ -237,6 +237,13 @@ function firstLine(text: string, max: number): string {
   return truncate(line, max);
 }
 
+/** The directory and branch one entry records, added to the running facts. */
+function recordEntryFacts(entry: RawEntry, repoPaths: Set<string>): string | null {
+  const cwd = asString(entry.cwd);
+  if (cwd !== null && isAbsolute(cwd)) repoPaths.add(cwd);
+  return asString(entry.gitBranch);
+}
+
 /** Read a whole session file into canonical turns. Pure: it takes the text, not a path. */
 export function readSessionText(text: string): SessionReadResult {
   const parsed = parseJsonl(text);
@@ -266,9 +273,8 @@ export function readSessionText(text: string): SessionReadResult {
       skipped++;
       continue;
     }
-    const cwd = asString(entry.cwd);
-    if (cwd !== null && isAbsolute(cwd)) repoPaths.add(cwd);
-    if (branch === null) branch = asString(entry.gitBranch);
+    const entryBranch = recordEntryFacts(entry, repoPaths);
+    if (branch === null) branch = entryBranch;
     const timestamp = toIsoUtc(entry.timestamp);
 
     if (entry.type === ENTRY_TYPE_USER && entry.isCompactSummary === true) {
@@ -394,6 +400,17 @@ export function readSessionText(text: string): SessionReadResult {
 
     // Every other entry type of C-3: system, attachment, file history, mode, and the rest.
     skipped++;
+  }
+
+  // A file cut mid-entry still records its directory and branch in the complete entries before
+  // the cut. Those facts let a native restore place the session and plan a recovery; the turns
+  // stay empty and `unreadable` stays set, so an import is never built from a shortened file.
+  if (parsed.unreadable !== null) {
+    for (const entry of parsed.entries) {
+      if (entry.isSidechain === true) continue;
+      const entryBranch = recordEntryFacts(entry, repoPaths);
+      if (branch === null) branch = entryBranch;
+    }
   }
 
   const firstUser = turns.find((turn) => turn.role === "user" && turn.kind === "message");
