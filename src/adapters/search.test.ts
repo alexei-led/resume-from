@@ -9,7 +9,9 @@ import { zstdCompressSync } from "node:zlib";
 import { afterAll, describe, expect, it } from "vitest";
 import { createClaudeCodeAdapter } from "./claude-code/adapter.js";
 import { codexAdapterFactory } from "./codex/index.js";
+import { searchRoots as codexSearchRoots } from "./codex/rollout.js";
 import { piUserDraft, writeFixtureSession } from "./pi/fixtures.js";
+import { searchRoots as piSearchRoots } from "./pi/format.js";
 import { piAdapterFactory } from "./pi/index.js";
 import {
   CLAUDE_CODE_CASE,
@@ -30,6 +32,44 @@ const HOME_HINT = "/home/tester";
 function claudeAdapter(homeDir = HOME_HINT) {
   return createClaudeCodeAdapter({ env: {}, homeDir });
 }
+
+describe("searchRoots names every profile, including the environment's", () => {
+  it("names the configured home and the ~/.claude* profiles", () => {
+    const adapter = createClaudeCodeAdapter({
+      env: { CLAUDE_CONFIG_DIR: "/profiles/claude-work" },
+      homeDir: "/home/tester",
+    });
+    expect(adapter.searchRoots()).toEqual([
+      "/profiles/claude-work/projects",
+      "/home/tester/.claude*/projects",
+    ]);
+  });
+
+  it("names CODEX_HOME and the ~/.codex* profiles", () => {
+    expect(codexSearchRoots({ CODEX_HOME: "/profiles/codex" }, "/home/tester")).toEqual([
+      "/profiles/codex/sessions",
+      "/profiles/codex/archived_sessions",
+      "/home/tester/.codex*/sessions",
+      "/home/tester/.codex*/archived_sessions",
+    ]);
+  });
+
+  it("names both Pi overrides and every ~/.pi/agent *sessions* directory", () => {
+    expect(
+      piSearchRoots(
+        {
+          PI_CODING_AGENT_DIR: "/profiles/pi-agent",
+          PI_CODING_AGENT_SESSION_DIR: "/profiles/pi-sessions",
+        },
+        "/home/tester",
+      ),
+    ).toEqual([
+      "/profiles/pi-agent/sessions",
+      "/profiles/pi-sessions",
+      "/home/tester/.pi/agent/*sessions*",
+    ]);
+  });
+});
 
 describe("findSessions matches by ID without parsing a whole home", () => {
   it("finds an exact ID and an uppercase spelling (Claude Code)", async () => {
