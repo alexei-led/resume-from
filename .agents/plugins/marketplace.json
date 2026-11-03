@@ -1,6 +1,6 @@
 {
   "name": "alexei-led-resume-from",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "interface": {
     "displayName": "resume-from"
   },
@@ -10,7 +10,7 @@
       "source": {
         "source": "npm",
         "package": "@alexeiled/resume-from-codex",
-        "version": "0.5.1"
+        "version": "0.5.2"
       },
       "policy": {
         "installation": "AVAILABLE",
