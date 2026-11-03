@@ -234,6 +234,46 @@ describe("byPath", () => {
     expect(descriptor.filePath).toBe(file);
   });
 
+  it("never falls through to another adapter when the containing adapter cannot read the file", async () => {
+    const { codexRoot, piRoot } = await scene();
+    // A corrupted rollout under Codex's root: Codex rejects it, and a permissive adapter
+    // must not then claim it as a session of its own.
+    const file = join(codexRoot, "rollout-broken.json");
+    await writeFile(file, "{ not JSON", "utf8");
+    const codex = makeStubAdapter({
+      agent: "codex",
+      defaultHome: codexRoot,
+      roots: [codexRoot],
+    });
+    const permissive = makeStubAdapter({ agent: "pi", defaultHome: piRoot, roots: [piRoot] });
+    const locator = createSessionLocator({
+      adapters: [
+        codex,
+        {
+          ...permissive,
+          describeSession: async () => ({
+            ref: { agent: "pi", home: piRoot, id: "rollout-broken.jsonl" },
+            title: "claimed",
+            startedAt: "2026-05-01T08:00:00Z",
+            updatedAt: "2026-05-01T08:00:00Z",
+            turnCount: 0,
+            repoPath: null,
+            repoPaths: [],
+            startDirectory: null,
+            filePath: file,
+          }),
+        },
+      ],
+    });
+
+    const error = await locator.byPath(file).then(
+      () => null,
+      (reason: unknown) => reasonOf(reason),
+    );
+    expect(error?.name).toBe("SessionSelectionError");
+    expect(error?.message).toContain("not a session file");
+  });
+
   it("rejects a path that is not a session file", async () => {
     const { claudeRoot } = await scene();
     const locator = createSessionLocator({

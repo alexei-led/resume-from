@@ -197,8 +197,9 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
         );
       }
 
-      // The root decides the agent; only when no root contains the file does trying each
-      // adapter decide it. A contained root's adapter comes first.
+      // The root decides the agent. When a root contains the file, only that root's adapter
+      // is tried: another adapter accepting the bytes would mislabel the session. Only a file
+      // outside every root is offered to each adapter in turn.
       const ordered = rankedSources(deps.adapters, "");
       const roots = await expandRoots(ordered);
       const containing = new Set(
@@ -206,10 +207,10 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
           .filter((entry) => isInsidePath(wanted, entry.root))
           .map((entry) => entry.adapter.capabilities().agent),
       );
-      const attempts = [
-        ...ordered.filter((adapter) => containing.has(adapter.capabilities().agent)),
-        ...ordered.filter((adapter) => !containing.has(adapter.capabilities().agent)),
-      ];
+      const attempts =
+        containing.size > 0
+          ? ordered.filter((adapter) => containing.has(adapter.capabilities().agent))
+          : ordered;
       for (const adapter of attempts) {
         try {
           const descriptor = await adapter.describeSession(wanted);
