@@ -441,9 +441,14 @@ describe("T-ROO-7 — the module graph is acyclic and layered", () => {
     const offenders = edges
       .filter((edge) => !edge.specifier.endsWith("/contract.js"))
       .filter((edge) => {
+        // A module and its submodules are one design tree. A parent building a submodule, or a
+        // submodule using the parent's shared implementation (for example the adapters' one
+        // redaction rule), is Internal Design rather than a cross-module import. A cycle cannot
+        // hide here: the acyclicity test above walks the whole graph, parent edges included.
+        if (isInside(edge.from, edge.to)) return false;
         if (!edge.specifier.endsWith("/index.js")) return true;
-        // A parent building its own submodules (its Internal Design), and the composition root
-        // building what the design says it constructs (docs/tech-stack.md, Isolation).
+        // The composition root builds what the design says it constructs
+        // (docs/tech-stack.md, Isolation).
         const isParent = isInside(edge.to, edge.from);
         const isCompositionRoot = edge.from === HOST_DIR && composed.has(edge.to);
         return !(isParent || isCompositionRoot);

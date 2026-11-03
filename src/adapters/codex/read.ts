@@ -5,6 +5,7 @@
  */
 
 import { isAbsolute } from "node:path";
+import { redactSensitiveArgumentsText, redactSensitiveText } from "../redaction.js";
 import type {
   CanonicalSession,
   CanonicalTurn,
@@ -14,7 +15,6 @@ import type {
   TurnKind,
   TurnRole,
 } from "./contract.js";
-import { redactSensitiveArgumentsText, redactSensitiveText } from "./redaction.js";
 import type { CodexSessionMeta, RolloutEntry, RolloutStreamState } from "./rollout.js";
 import {
   CODEX_ENTRY_COMPACTED,

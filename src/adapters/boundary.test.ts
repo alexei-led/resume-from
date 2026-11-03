@@ -3,14 +3,9 @@
  *
  * They are the tests of what an adapter may never do: create a file, touch a source, open a
  * connection, place unchecked bytes, mint a colliding id, or guess at a file it cannot read.
- *
- * Also holds the redaction-copy guard (Finding 2): the three redaction.ts copies are
- * byte-identical by design, and this test fails immediately if they drift.
  */
 
-import { readFileSync } from "node:fs";
-import path, { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PendingFile, SerializedSession, SessionDescriptor } from "./contract.js";
 import {
@@ -264,28 +259,3 @@ describe.each(cases)(
     });
   },
 );
-
-/**
- * Finding 2 (P2, design): the three redaction.ts copies are byte-identical.
- * Consolidating into a shared module is blocked: src/adapters/contract.ts is types-only, and
- * importing behaviour from src/platform/ would be rejected by T-ROO-7 (adapter imports from a
- * non-parent, non-composition-root module must end in /contract.js — which exports only types).
- * The three files are kept in sync by policy. This test enforces that policy mechanically.
- */
-describe("redaction implementations are byte-identical across adapter submodules", () => {
-  // fileURLToPath, not .pathname: a checkout path with spaces or non-ASCII must not
-  // percent-encode into an ENOENT that would disguise itself as a drift failure.
-  const ADAPTERS_DIR = fileURLToPath(new URL(".", import.meta.url));
-  const REDACTION_FILES = [
-    join(ADAPTERS_DIR, "claude-code", "redaction.ts"),
-    join(ADAPTERS_DIR, "codex", "redaction.ts"),
-    join(ADAPTERS_DIR, "pi", "redaction.ts"),
-  ];
-
-  it("all three redaction.ts files are byte-identical (edit all three together)", () => {
-    const [first, ...rest] = REDACTION_FILES.map((file) => readFileSync(file, "utf8"));
-    for (const content of rest) {
-      expect(content).toBe(first);
-    }
-  });
-});

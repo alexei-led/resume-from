@@ -8,6 +8,7 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { redactSensitiveStructure, redactSensitiveText } from "../redaction.js";
 import type {
   CanonicalSession,
   CanonicalTurn,
@@ -29,7 +30,6 @@ import {
   toIsoUtc,
 } from "./entries.js";
 import { listSessionFiles, sessionIdOf } from "./layout.js";
-import { redactSensitiveStructure, redactSensitiveText } from "./redaction.js";
 
 /** FR-25: every dropped body is marked in text the model can read. */
 export const DROPPED_MARKER = "(content dropped: imported session, may be stale)";

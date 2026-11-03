@@ -7,6 +7,7 @@
  *   and an unparsable line makes the whole file unreadable rather than shorter.
  */
 
+import { redactSensitiveStructure, redactSensitiveText } from "../redaction.js";
 import type { CanonicalTurn, ToolCallRecord } from "./contract.js";
 import {
   asEntry,
@@ -24,7 +25,6 @@ import {
   toolEffectFor,
   visibleText,
 } from "./format.js";
-import { redactSensitiveStructure, redactSensitiveText } from "./redaction.js";
 
 export interface ParsedSessionFile {
   header: PiSessionHeader | null;

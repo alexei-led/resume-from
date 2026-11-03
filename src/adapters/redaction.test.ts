@@ -1,15 +1,7 @@
 import { describe, expect, it } from "vitest";
-import * as claudeCode from "./claude-code/redaction.js";
-import * as codex from "./codex/redaction.js";
-import * as pi from "./pi/redaction.js";
+import * as redaction from "./redaction.js";
 
-const IMPLEMENTATIONS = [
-  ["pi", pi],
-  ["codex", codex],
-  ["claude-code", claudeCode],
-] as const;
-
-describe.each(IMPLEMENTATIONS)("%s credential redaction", (_name, redaction) => {
+describe("credential redaction", () => {
   it("redacts sensitive keys and every value in environment maps", () => {
     expect(
       redaction.redactSensitiveStructure({

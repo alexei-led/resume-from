@@ -1,17 +1,9 @@
 /**
- * Credential redaction — shared implementation kept in three adapter subfolders.
+ * Credential redaction — one implementation shared by every adapter.
  *
- * Files:
- *   src/adapters/claude-code/redaction.ts
- *   src/adapters/codex/redaction.ts
- *   src/adapters/pi/redaction.ts
- *
- * These three files are byte-identical by design. A fix in one MUST be applied to all three.
- * src/adapters/boundary.test.ts asserts byte equality and will fail if they drift.
- *
- * Why not a single shared module: src/adapters/contract.ts is types-only (no behaviour). A
- * platform service would be imported as behaviour, and T-ROO-7 requires adapter-to-platform
- * cross-module imports to go through contract.js — which can only export types, not functions.
+ * The parent module owns the rules every adapter obeys (`src/adapters/module.md`, Purpose), so
+ * this file lives here and each submodule imports `../redaction.js`. Fixing it here fixes it for
+ * every agent; no copy can drift.
  */
 
 /** Stable replacement used for credentials that must not cross an adapter boundary. */

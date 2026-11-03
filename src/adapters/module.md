@@ -458,11 +458,10 @@ module.
   otherwise cross to a different model vendor when the session is resumed there. Each adapter applies
   `redactSensitiveText` to every non-empty turn text at the point of construction, so no turn that
   reaches `CanonicalSession.turns` can carry a recognizable credential in its `text` field.
-- **The three adapter copies of `redaction.ts` are byte-identical by design.** Consolidating into a
-  shared module is blocked: `src/adapters/contract.ts` is types-only (no behaviour), and importing
-  behaviour from `src/platform/` would violate T-ROO-7 (cross-module imports must go through
-  `/contract.js`, which can export only types). The byte-equality invariant is enforced by
-  `src/adapters/boundary.test.ts`; a fix in one copy must be applied to all three.
+- **There is one credential redaction rule, owned by this module.** `redaction.ts` lives at the
+  parent's root and every adapter submodule imports `../redaction.js`; a fix reaches every agent at
+  once. A submodule using its parent's shared implementation is Internal Design, not a
+  cross-module import (T-ROO-7), and the module graph test still rejects a cycle.
 - **Redaction takes each value whole, and the key name is bounded.** A key and its value are matched
   as one span and the value is replaced in full, so no credential is ever left partly in place: a
   quoted key of any length, a URL-encoded or `~`-bearing token, a 4200-character JWT on a `token:`
