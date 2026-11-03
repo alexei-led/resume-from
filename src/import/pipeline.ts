@@ -396,8 +396,6 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
       if (expected === null) {
         return {
           ok: false,
-          failedCommand: null,
-          stdout: "",
           stderr: "",
           message: "this session's directory needs no recovery",
         };
@@ -405,8 +403,6 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
       if (!tokenMatches(expected, token)) {
         return {
           ok: false,
-          failedCommand: null,
-          stdout: "",
           stderr: "",
           message:
             "the confirmation token does not match this recovery, so nothing was run. Run the exact Confirm: command shown by the preview.",

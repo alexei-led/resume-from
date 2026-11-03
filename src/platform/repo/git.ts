@@ -88,7 +88,7 @@ export function runGit(
   });
 }
 
-interface NormalizedOptions {
+export interface NormalizedOptions {
   timeoutMs: number;
   signal?: AbortSignal | undefined;
 }
@@ -99,6 +99,27 @@ export function normalizeGitOptions(options: RepoReaderOptions): NormalizedOptio
     throw new RangeError("git timeoutMs must be a positive, finite integer");
   }
   return options.signal === undefined ? { timeoutMs } : { timeoutMs, signal: options.signal };
+}
+
+/** A git runner bound to one set of process controls. */
+export type GitRunner = (cwd: string, args: readonly string[]) => Promise<GitResult>;
+
+/** Throws AbortError with the signal's reason when the reader was cancelled. Performs no I/O. */
+export function createCancellationCheck(options: NormalizedOptions): () => void {
+  return () => {
+    if (options.signal?.aborted) {
+      const error = new Error("Repository read aborted", { cause: options.signal.reason });
+      error.name = "AbortError";
+      throw error;
+    }
+  };
+}
+
+/** The branch HEAD is on, or null when HEAD is detached. An unborn branch still has a name. */
+export async function currentBranch(dir: string, git: GitRunner): Promise<string | null> {
+  const result = await git(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  const name = result.stdout.trim();
+  return result.ok && name !== "" ? name : null;
 }
 
 function processError(cwd: string, options: NormalizedOptions, cause: ExecFileException): Error {

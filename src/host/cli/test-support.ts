@@ -201,8 +201,6 @@ export function stubPipeline(options: StubOptions = {}): StubPipeline {
       calls.order.push("recover");
       return {
         ok: false,
-        failedCommand: null,
-        stdout: "",
         stderr: "",
         message: "this stub has no recovery",
       };

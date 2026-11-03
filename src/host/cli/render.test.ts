@@ -53,7 +53,6 @@ it("sanitises Recover and Confirm commands, and the recovery warnings", () => {
       directory: "/gone/app",
       warnings: [`branch ${ESCAPE}red no longer exists`],
       recovery: {
-        repoRoot: "/work/app",
         directory: "/gone/app",
         commands: [
           {

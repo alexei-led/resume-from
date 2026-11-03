@@ -167,7 +167,6 @@ describe("recovery planning and execution", () => {
     const { dir } = await repoWithOneCommit();
     const planner = createWorktreeRecovery();
     const plan: RecoverySteps = {
-      repoRoot: dir,
       directory: join(dir, "new"),
       commands: [{ cwd: dir, argv: ["fetch", "origin"], display: "git -C x fetch origin" }],
       warnings: [],
@@ -181,7 +180,6 @@ describe("recovery planning and execution", () => {
     const { dir } = await repoWithOneCommit();
     const target = join(`${dir}.worktrees`, "bad");
     const plan: RecoverySteps = {
-      repoRoot: dir,
       directory: target,
       commands: [
         {
@@ -194,7 +192,6 @@ describe("recovery planning and execution", () => {
     };
     const result = await createWorktreeRecovery().recover(plan);
     expect(result.ok).toBe(false);
-    expect(result.failedCommand).toContain("no-such-branch");
     expect(result.message?.length).toBeGreaterThan(0);
   });
 });

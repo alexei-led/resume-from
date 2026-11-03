@@ -13,7 +13,14 @@ import type {
   RepoReaderOptions,
   WorktreeRecovery,
 } from "./contract.js";
-import { type GitResult, normalizeGitOptions, plausibleRevision, runGit } from "./git.js";
+import {
+  createCancellationCheck,
+  currentBranch,
+  type GitResult,
+  normalizeGitOptions,
+  plausibleRevision,
+  runGit,
+} from "./git.js";
 
 /** Characters that need no quoting in a POSIX display command. */
 const SAFE_ARGUMENT = /^[A-Za-z0-9_./:=+-]+$/;
@@ -108,19 +115,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
   const git = (cwd: string, argv: readonly string[]): Promise<GitResult> =>
     runGit(cwd, argv, processOptions);
 
-  const checkCancellation = (): void => {
-    if (processOptions.signal?.aborted) {
-      const error = new Error("Repository read aborted", { cause: processOptions.signal.reason });
-      error.name = "AbortError";
-      throw error;
-    }
-  };
-
-  async function currentBranch(directory: string): Promise<string | null> {
-    const result = await git(directory, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    const name = result.stdout.trim();
-    return result.ok && name !== "" ? name : null;
-  }
+  const checkCancellation = createCancellationCheck(processOptions);
 
   async function worktrees(repoRoot: string): Promise<WorktreeEntry[]> {
     const result = await git(repoRoot, ["worktree", "list", "--porcelain"]);
@@ -221,7 +216,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       headFallback();
     }
 
-    return { repoRoot, directory, commands, warnings };
+    return { directory, commands, warnings };
   }
 
   return {
@@ -233,7 +228,7 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       const warnings: string[] = [];
 
       if (await isDirectory(directory)) {
-        const branch = await currentBranch(directory);
+        const branch = await currentBranch(directory, git);
         if (request.branch !== null && branch !== request.branch) {
           warnings.push(
             `${directory} ${branch === null ? "is not on a branch" : `is on branch ${branch}`}, ` +
@@ -287,40 +282,32 @@ export function createWorktreeRecovery(options: RepoReaderOptions = {}): Worktre
       if (await pathExists(plan.directory)) {
         return {
           ok: false,
-          failedCommand: null,
-          stdout: "",
           stderr: "",
           message: `refusing to recover into existing path ${plan.directory}`,
         };
       }
 
-      let stdout = "";
       let stderr = "";
       for (const planned of plan.commands) {
         if (!isAllowedRecoveryCommand(planned.argv)) {
           return {
             ok: false,
-            failedCommand: planned.display,
-            stdout,
             stderr,
             message: `refusing to run a command that is not a worktree add or prune: ${planned.display}`,
           };
         }
         const result = await git(planned.cwd, planned.argv);
         checkCancellation();
-        stdout += result.stdout;
         stderr += result.stderr;
         if (!result.ok) {
           return {
             ok: false,
-            failedCommand: planned.display,
-            stdout,
             stderr,
             message: result.stderr.trim() || result.stdout.trim() || "git failed without a message",
           };
         }
       }
-      return { ok: true, failedCommand: null, stdout, stderr, message: null };
+      return { ok: true, stderr, message: null };
     },
   };
 }

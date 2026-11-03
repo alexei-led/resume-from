@@ -1,7 +1,14 @@
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { CommitDistance, RepoIdentity, RepoReader, RepoReaderOptions } from "./contract.js";
-import { type GitResult, normalizeGitOptions, plausibleRevision, runGit } from "./git.js";
+import {
+  createCancellationCheck,
+  currentBranch,
+  type GitRunner,
+  normalizeGitOptions,
+  plausibleRevision,
+  runGit,
+} from "./git.js";
 
 /** Nothing is known: `ahead` and `behind` are 0 so a caller cannot print a fabricated distance. */
 function unknownDistance(): CommitDistance {
@@ -18,13 +25,7 @@ export function createRepoReader(options: RepoReaderOptions = {}): RepoReader {
   const git = (directory: string, args: readonly string[]) =>
     runGit(directory, args, processOptions);
 
-  const checkCancellation = () => {
-    if (processOptions.signal?.aborted) {
-      const error = new Error("Repository read aborted", { cause: processOptions.signal.reason });
-      error.name = "AbortError";
-      throw error;
-    }
-  };
+  const checkCancellation = createCancellationCheck(processOptions);
 
   return {
     checkCancellation,
@@ -47,8 +48,6 @@ export function createRepoReader(options: RepoReaderOptions = {}): RepoReader {
 function pathOutput(stdout: string): string {
   return stdout.endsWith("\n") ? stdout.slice(0, -1) : stdout;
 }
-
-type GitRunner = (cwd: string, args: readonly string[]) => Promise<GitResult>;
 
 async function identify(directory: string, git: GitRunner): Promise<RepoIdentity> {
   // Resolve the input itself: a missing worktree must never inherit its parent's identity.
@@ -80,7 +79,7 @@ async function identify(directory: string, git: GitRunner): Promise<RepoIdentity
     commonDir,
     isBare,
     head: await commitOf(dir, "HEAD", git),
-    branch: await branch(dir, git),
+    branch: await currentBranch(dir, git),
   };
 }
 
@@ -131,13 +130,6 @@ async function commitOf(dir: string, revision: string, git: GitRunner): Promise<
   ]);
   const commit = result.stdout.trim();
   return result.ok && commit !== "" ? commit : null;
-}
-
-/** The branch HEAD is on, or null when HEAD is detached. An unborn branch still has a name. */
-async function branch(dir: string, git: GitRunner): Promise<string | null> {
-  const result = await git(dir, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-  const name = result.stdout.trim();
-  return result.ok && name !== "" ? name : null;
 }
 
 /** The real path of a directory, following symlinks, so paths compare as locations. */

@@ -22,6 +22,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REFERENCE_SESSION } from "../../test/fixtures/reference-session.js";
+import { sessionIdMatches } from "../adapters/id-match.js";
 import type {
   CommitDistance,
   Place,
@@ -107,8 +108,6 @@ export const inertRecovery: WorktreeRecovery = {
     }) satisfies Place,
   recover: async (): Promise<RecoveryResult> => ({
     ok: false,
-    failedCommand: null,
-    stdout: "",
     stderr: "",
     message: "no recovery in a unit test",
   }),
@@ -384,14 +383,10 @@ export function createStubAdapter(options: StubAdapterOptions): AgentAdapter {
     async findSessions(root: HomePath, query: string): Promise<SessionDescriptor[]> {
       record("findSessions");
       const names = (await readdir(root).catch(() => [])).filter((name) => name.endsWith(".jsonl"));
-      const wanted = query.toLowerCase();
       const descriptors: SessionDescriptor[] = [];
       for (const name of names.sort()) {
         const id = name.slice(0, -".jsonl".length);
-        const matches =
-          id.toLowerCase() === wanted ||
-          (wanted.length >= 6 && id.toLowerCase().startsWith(wanted));
-        if (!matches) continue;
+        if (!sessionIdMatches(id, query)) continue;
         const filePath = path.join(root, name);
         const parsed = await parseSession(filePath);
         descriptors.push(await descriptorFor(parsed, options.agent, options.home, filePath));
@@ -669,9 +664,6 @@ export function recordingStages(overrides: Partial<PipelineStages> = {}): StageR
       async byPath() {
         calls.push("locator.byPath");
         return descriptor;
-      },
-      async roots() {
-        return [];
       },
     },
     recovery: inertRecovery,

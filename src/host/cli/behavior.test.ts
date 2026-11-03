@@ -198,7 +198,6 @@ describe("T-CLI-25 the identifier flow", () => {
         branch: null,
         warnings: [],
         recovery: {
-          repoRoot: "/work/app",
           directory: "/gone/app",
           commands: [
             {

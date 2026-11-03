@@ -119,7 +119,6 @@ interface RecoveryCommand {
 
 /** How a missing directory would be recreated (FR-61). */
 interface RecoverySteps {
-  repoRoot: string;
   directory: string;
   /** In order; a prune precedes the add when the directory is a stale registration. */
   commands: RecoveryCommand[];
@@ -143,9 +142,6 @@ interface Place {
 /** What running a recovery plan produced. */
 interface RecoveryResult {
   ok: boolean;
-  /** The display form of the command that failed, when one did. */
-  failedCommand: string | null;
-  stdout: string;
   stderr: string;
   /** git's own message, or the refusal reason. */
   message: string | null;

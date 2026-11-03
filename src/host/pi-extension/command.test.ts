@@ -191,8 +191,6 @@ function stubPipeline(
         return (
           opts.recovery ?? {
             ok: false,
-            failedCommand: null,
-            stdout: "",
             stderr: "",
             message: "no recovery in this stub",
           }
