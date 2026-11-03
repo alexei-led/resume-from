@@ -1,6 +1,6 @@
 {
   "name": "resume-from",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Continue a coding session from another agent or profile.",
   "author": {
     "name": "Alexei Ledenev"
