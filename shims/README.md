@@ -1,6 +1,6 @@
 # Host shims
 
-The host shims expose one core implementation as `/resume-from` (`$resume-from` in Codex).
+The host shims expose one core implementation as `/resume-from` (`/resume-from:resume-from` in Claude Code, `$resume-from` in Codex).
 
 - Pi uses `resume-from` and `shims/pi/extensions/resume-from.js`.
 - Claude Code installs `shims/claude-code` from git at the release tag and uses
