@@ -71,6 +71,11 @@ resume-from --target-agent codex --
 Everything after `--` is the selection: a row number, session ID, or file path. A printed
 `Confirm:` line repeats this prefix, so it can be pasted into the same shell.
 
+## Claude Code says `Unknown command: /resume-from`
+
+Claude Code prefixes a plugin command with the plugin name. Type `/resume-from:resume-from <id>`. In Codex,
+the command is the skill `$resume-from <id>`; only Pi uses plain `/resume-from`.
+
 ## `claude plugin update` fails with `EALLOWREMOTE`
 
 Version 0.5.3 and earlier installed from the npm registry. npm 12 refuses that download unless

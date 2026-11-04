@@ -1,6 +1,7 @@
 # Claude Code guide
 
-The Claude Code plugin adds `/resume-from`. The command runs the matching published `resume-from`
+The Claude Code plugin adds the command `/resume-from:resume-from`. Claude Code prefixes a plugin
+command with the plugin name, so plain `/resume-from` is "Unknown command". The command runs the matching published `resume-from`
 package through `npx`.
 
 ## Install
@@ -30,7 +31,7 @@ the npm registry. Later use can use the local npm cache.
 ## Restore a session
 
 ```text
-/resume-from <id>
+/resume-from:resume-from <id>
 ```
 
 The lookup is global. An exact ID wins; a prefix of at least six characters selects the session when
@@ -47,7 +48,7 @@ Resume: cd <dir> && claude --resume <session-id>
 When the session belongs to another agent or Claude Code profile, or `--to <dir>` is given, the tool shows an import preview
 and the exact `Confirm:` command. After the import it prints the same two lines for the new session.
 
-Type the `Resume in place:` command in the Claude Code session where you ran `/resume-from`. Claude
+Type the `Resume in place:` command in the Claude Code session where you ran `/resume-from:resume-from`. Claude
 Code opens the session there and moves to its directory. That process keeps its launch settings, so
 a wrapper such as `claude-work` or extra `--settings` stay in effect. The plugin does not start another
 Claude Code process. The `Resume:` line is for another terminal; it starts a bare `claude`.
@@ -69,9 +70,9 @@ The imported session starts with a three-line summary in one `system` entry (sub
 ## Options
 
 ```text
-/resume-from <id> --to <existing-checkout>
-/resume-from <id> --prompt "continue the refactor"
-/resume-from <id> --context
+/resume-from:resume-from <id> --to <existing-checkout>
+/resume-from:resume-from <id> --prompt "continue the refactor"
+/resume-from:resume-from <id> --context
 ```
 
 `--context` is read-only and prints the conversation an import into Claude Code would keep.

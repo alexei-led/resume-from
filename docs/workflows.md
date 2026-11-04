@@ -7,6 +7,9 @@ repository, credentials, or a running process.
 
 ## Restore a session from its ID
 
+Examples write `/resume-from`. In Claude Code, type `/resume-from:resume-from`. In Codex, type
+`$resume-from`.
+
 ```text
 /resume-from <id-or-prefix>
 ```

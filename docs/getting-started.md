@@ -19,7 +19,7 @@ claude plugin marketplace add alexei-led/resume-from
 claude plugin install resume-from@alexei-led-resume-from
 ```
 
-Restart Claude Code if `/resume-from` does not appear. The command runs a pinned package through
+Restart Claude Code if the command does not appear. The command runs a pinned package through
 `npx`. Its first use needs access to the npm registry.
 
 ### Codex
@@ -33,6 +33,17 @@ Run the Codex skill as `$resume-from <id>`. It uses a pinned package through `np
 needs access to the npm registry.
 
 ## 2. Restore by ID
+
+Claude Code prefixes every plugin command with the plugin name, so plain `/resume-from` is "Unknown
+command" there. Each agent has its own form:
+
+| Agent       | Command                          |
+| ----------- | -------------------------------- |
+| Pi          | `/resume-from <id>`              |
+| Claude Code | `/resume-from:resume-from <id>`  |
+| Codex       | `$resume-from <id>`              |
+
+Examples in this guide write `/resume-from`. Use the form for your agent.
 
 ```text
 /resume-from <session-id>

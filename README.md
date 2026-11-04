@@ -125,6 +125,17 @@ npm registry access.
 
 ## Run the first restore
 
+Claude Code prefixes every plugin command with the plugin name, so plain `/resume-from` is "Unknown
+command" there. Each agent has its own form:
+
+| Agent       | Command                          |
+| ----------- | -------------------------------- |
+| Pi          | `/resume-from <id>`              |
+| Claude Code | `/resume-from:resume-from <id>`  |
+| Codex       | `$resume-from <id>`              |
+
+Examples in this repository write `/resume-from`. Use the form for your agent.
+
 ```text
 /resume-from dc601a22
 ```
