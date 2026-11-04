@@ -1,6 +1,7 @@
 # Claude Code guide
 
-The Claude Code plugin adds `/resume-from` and includes the matching command binary.
+The Claude Code plugin adds `/resume-from`. The command runs the matching published `resume-from`
+package through `npx`.
 
 ## Install
 
@@ -10,6 +11,21 @@ claude plugin install resume-from@alexei-led-resume-from
 ```
 
 If the command does not appear, restart Claude Code.
+
+## Update
+
+```sh
+claude plugin marketplace update alexei-led-resume-from
+claude plugin update resume-from@alexei-led-resume-from
+```
+
+The plugin installs from this repository, pinned to the release tag. It does not use the npm
+registry, so npm's `allow-remote` setting does not affect it. Restart Claude Code after an update.
+
+## Network requirement
+
+The command runs a pinned `resume-from` version through `npx --yes`. The first use needs access to
+the npm registry. Later use can use the local npm cache.
 
 ## Restore a session
 
@@ -76,8 +92,8 @@ Add other source profiles in the shared [configuration file](../configuration.md
 
 ## Runtime details
 
-The plugin runs its bundled `dist/bin.js`. A separate global install of `resume-from` is not
-necessary.
+The command runs `npx --yes resume-from@<version>`, where `<version>` is the plugin version. A
+separate global install of `resume-from` is not necessary.
 
 The active `CLAUDE_CONFIG_DIR` is the import target. A personal session restored from a work
 profile is imported into the work profile, not reopened in the personal one. Non-default profile

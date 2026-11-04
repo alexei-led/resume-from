@@ -11,7 +11,7 @@ the command set of Codex and Claude Code is fixed, so our command cannot open an
 selection inside them. FR-10 is the answer: print a numbered list, and let the user run the command
 again with a number.
 
-The module is a command binary. The Codex prompt file and the Claude Code slash-command file both
+The module is a command binary. The Codex skill file and the Claude Code slash-command file both
 call it, and it prints to standard output. It holds no rule — it turns arguments into pipeline calls
 and pipeline results into text.
 

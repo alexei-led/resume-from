@@ -1,11 +1,12 @@
 {
   "name": "resume-from",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Continue a coding session from another agent or profile.",
   "author": {
     "name": "Alexei Ledenev"
   },
   "license": "MIT",
+  "skills": "./skills/",
   "repository": "https://github.com/alexei-led/resume-from",
   "homepage": "https://github.com/alexei-led/resume-from",
   "keywords": ["session", "handoff", "claude-code", "pi", "resume"]

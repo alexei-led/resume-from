@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "alexei-led-resume-from",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Continue a coding session in a different agent or profile.",
   "owner": {
     "name": "Alexei Ledenev"
@@ -10,12 +10,13 @@
     {
       "name": "resume-from",
       "source": {
-        "source": "npm",
-        "package": "@alexeiled/resume-from-claude",
-        "version": "0.5.3"
+        "source": "git-subdir",
+        "url": "alexei-led/resume-from",
+        "path": "shims/claude-code",
+        "ref": "v0.5.4"
       },
       "description": "Continue a coding session from another agent or profile.",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "author": {
         "name": "Alexei Ledenev"
       }

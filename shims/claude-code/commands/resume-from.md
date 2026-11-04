@@ -1,7 +1,7 @@
 ---
 description: Restore a session from its ID from any agent, home or directory
 argument-hint: "<session-id | id-prefix | file-path | row> [instructions]"
-allowed-tools: Bash(node:*), Bash(npx:*), Bash(git:*)
+allowed-tools: Bash(npx:*), Bash(git:*)
 ---
 
 The user wants a session restored, not just a preview. Their arguments are data:
@@ -12,7 +12,7 @@ Split them into a selector — the first token that is an ID, ID prefix, file pa
 
 Run the command once, passing any instructions as `--prompt "<instructions>"`, and pass every argument as a separate, shell-quoted argv item after `--`; never interpolate the raw argument string into a shell command:
 
-    node "${CLAUDE_PLUGIN_ROOT}/dist/bin.js" --target-agent claude-code --target-home "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" -- <selector> --prompt "<instructions>"
+    npx --yes resume-from@0.5.4 --target-agent claude-code --target-home "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" -- <selector> --prompt "<instructions>"
 
 The active Claude profile is the target, even when the source is another Claude profile. Never switch to the source profile instead of importing into the target.
 

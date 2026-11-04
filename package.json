@@ -1,6 +1,6 @@
 {
   "name": "resume-from",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Continue a coding session in a different agent, or a different profile.",
   "keywords": [
     "pi-package",
@@ -50,7 +50,6 @@
     "@earendil-works/pi-tui": "^1.0.2",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.0",
-    "esbuild": "0.28.2",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
     "typescript": "^7.0.2",

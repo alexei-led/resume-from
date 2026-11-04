@@ -1,11 +1,11 @@
 # Host shims
 
-The host shims expose one core implementation as `/resume-from`.
+The host shims expose one core implementation as `/resume-from` (`$resume-from` in Codex).
 
 - Pi uses `resume-from` and `shims/pi/extensions/resume-from.js`.
-- Claude Code uses `@alexeiled/resume-from-claude` and
-  `commands/resume-from.md`.
-- Codex uses `@alexeiled/resume-from-codex` and `prompts/resume-from.md`.
+- Claude Code installs `shims/claude-code` from git at the release tag and uses
+  `commands/resume-from.md`. The `@alexeiled/resume-from-claude` package holds the same files.
+- Codex uses `@alexeiled/resume-from-codex` and `skills/resume-from/SKILL.md`.
 
 ## Boundaries
 
@@ -35,7 +35,7 @@ Run this command to inspect the npm files and manifests:
 npm run packages:check
 ```
 
-The Claude Code package contains its command binary. The Codex package pins the
-matching core package version.
+The Claude Code command and the Codex skill both pin the matching core package version and run it
+through `npx`. Neither package contains a binary.
 
 Read the user guides in [`docs/agents/`](../docs/agents/).

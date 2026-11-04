@@ -1,6 +1,6 @@
 # Codex guide
 
-The Codex plugin adds a `/resume-from` prompt. The prompt runs the matching published command
+The Codex plugin adds a `resume-from` skill. The skill runs the matching published command
 package.
 
 ## Install
@@ -14,13 +14,13 @@ Use Codex CLI or the Codex desktop application. The Codex IDE extension does not
 
 ## Network requirement
 
-The prompt runs a pinned `resume-from` version through `npx --yes`. The first use needs access to the
+The skill runs a pinned `resume-from` version through `npx --yes`. The first use needs access to the
 npm registry. Later use can use the local npm cache.
 
 ## Restore a session
 
 ```text
-/resume-from <id>
+$resume-from <id>
 ```
 
 The lookup is global. An exact ID wins; a prefix of at least six characters selects the session when
@@ -37,7 +37,7 @@ Resume: cd <dir> && codex resume <thread-id>
 When the session belongs to another agent or Codex profile, or `--to <dir>` is given, the tool shows an import preview
 and the exact `Confirm:` command. After the import it prints the same two lines for the new thread.
 
-Type the `Resume in place:` command in the Codex session where you ran `/resume-from`. Codex opens
+Type the `Resume in place:` command in the Codex session where you ran `$resume-from`. Codex opens
 the thread there and moves to its directory. The plugin does not start another Codex process. The
 `Resume:` line is for another terminal.
 
@@ -58,9 +58,9 @@ printed in the command output only:
 ## Options
 
 ```text
-/resume-from <id> --to <existing-checkout>
-/resume-from <id> --prompt "continue the refactor"
-/resume-from <id> --context
+$resume-from <id> --to <existing-checkout>
+$resume-from <id> --prompt "continue the refactor"
+$resume-from <id> --context
 ```
 
 `--context` is read-only and prints the conversation an import into Codex would keep. `--agent` and
