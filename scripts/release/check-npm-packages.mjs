@@ -58,7 +58,7 @@ const packages = [
       "README.md",
       "LICENSE",
       ".codex-plugin/plugin.json",
-      "prompts/resume-from.md",
+      "skills/resume-from/SKILL.md",
     ],
     maxUnpackedBytes: 20_000,
     forbidden: (path) => path.startsWith("dist/"),
@@ -240,19 +240,19 @@ if (!claudeCommand.includes("${CLAUDE_PLUGIN_ROOT}/dist/bin.js")) {
 }
 assertNoRawArgumentInterpolation(resolve(repoRoot, "build/npm/claude/commands/resume-from.md"));
 
-const codexPrompt = readFileSync(
-  resolve(repoRoot, "build/npm/codex/prompts/resume-from.md"),
+const codexSkill = readFileSync(
+  resolve(repoRoot, "build/npm/codex/skills/resume-from/SKILL.md"),
   "utf8",
 );
-if (codexPrompt.includes("__RESUME_FROM_VERSION__") || !codexPrompt.includes(`resume-from@${version}`)) {
-  throw new Error("Codex prompt does not pin the matching core CLI version.");
+if (codexSkill.includes("__RESUME_FROM_VERSION__") || !codexSkill.includes(`resume-from@${version}`)) {
+  throw new Error("Codex skill does not pin the matching core CLI version.");
 }
-assertNoRawArgumentInterpolation(resolve(repoRoot, "build/npm/codex/prompts/resume-from.md"));
+assertNoRawArgumentInterpolation(resolve(repoRoot, "build/npm/codex/skills/resume-from/SKILL.md"));
 
 // Check the actual staged instructions, including Codex's sole intentional transformation.
 for (const [contents, source] of [
   [claudeCommand, "shims/claude-code/commands/resume-from.md"],
-  [codexPrompt, "shims/codex/prompts/resume-from.md"],
+  [codexSkill, "shims/codex/skills/resume-from/SKILL.md"],
 ]) {
   const expected = readFileSync(resolve(repoRoot, source), "utf8")
     .replaceAll("__RESUME_FROM_VERSION__", version);

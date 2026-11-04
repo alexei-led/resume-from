@@ -6,6 +6,7 @@
     "name": "Alexei Ledenev"
   },
   "license": "MIT",
+  "skills": "./skills/",
   "repository": "https://github.com/alexei-led/resume-from",
   "homepage": "https://github.com/alexei-led/resume-from",
   "keywords": ["session", "handoff", "claude-code", "pi", "resume"]

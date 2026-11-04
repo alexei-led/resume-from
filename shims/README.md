@@ -1,11 +1,11 @@
 # Host shims
 
-The host shims expose one core implementation as `/resume-from`.
+The host shims expose one core implementation as `/resume-from` (`$resume-from` in Codex).
 
 - Pi uses `resume-from` and `shims/pi/extensions/resume-from.js`.
 - Claude Code uses `@alexeiled/resume-from-claude` and
   `commands/resume-from.md`.
-- Codex uses `@alexeiled/resume-from-codex` and `prompts/resume-from.md`.
+- Codex uses `@alexeiled/resume-from-codex` and `skills/resume-from/SKILL.md`.
 
 ## Boundaries
 

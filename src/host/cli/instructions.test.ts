@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
 
-const SHIMS = ["shims/claude-code/commands/resume-from.md", "shims/codex/prompts/resume-from.md"];
+const SHIMS = ["shims/claude-code/commands/resume-from.md", "shims/codex/skills/resume-from/SKILL.md"];
 
 test.each(SHIMS)("%s restores the session instead of only previewing it", async (path) => {
   const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
@@ -51,9 +51,9 @@ test("the Claude command preserves the target profile", async () => {
   expect(text).toContain("CLAUDE_CONFIG_DIR:-$HOME/.claude");
 });
 
-test("the Codex prompt keeps the pinned package prefix", async () => {
+test("the Codex skill keeps the pinned package prefix", async () => {
   const text = await readFile(
-    new URL("../../../shims/codex/prompts/resume-from.md", import.meta.url),
+    new URL("../../../shims/codex/skills/resume-from/SKILL.md", import.meta.url),
     "utf8",
   );
   expect(text).toContain("npx --yes resume-from@__RESUME_FROM_VERSION__ --target-agent codex --");

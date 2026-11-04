@@ -27,8 +27,8 @@ const packages = [
   {
     target: "codex",
     name: "@alexeiled/resume-from-codex",
-    description: "Codex plugin prompt for resuming a session from another coding agent.",
-    files: [".codex-plugin", "prompts"],
+    description: "Codex plugin skill for resuming a session from another coding agent.",
+    files: [".codex-plugin", "skills"],
     install:
       "codex plugin marketplace add alexei-led/resume-from\ncodex plugin add resume-from@alexei-led-resume-from",
   },
@@ -65,7 +65,7 @@ function packageReadme(spec) {
  * Claude Code installs a plugin by unpacking the tarball alone: the cache directory holds no
  * node_modules, so a bare `gpt-tokenizer` import in the published bin.js fails to resolve at
  * runtime. The Claude package therefore ships one self-contained bundle instead of the tsc
- * output. Every other consumer — the root npm package, the Codex prompt, the Pi shim — is
+ * output. Every other consumer — the root npm package, the Codex skill, the Pi shim — is
  * installed by a package manager that resolves dependencies, and keeps the unbundled build.
  */
 function bundleClaudeBinary(destination) {
@@ -134,7 +134,7 @@ function stagePackage(spec) {
   if (spec.target === "claude") {
     bundleClaudeBinary(destination);
   } else {
-    const promptPath = resolve(destination, "prompts/resume-from.md");
+    const promptPath = resolve(destination, "skills/resume-from/SKILL.md");
     const prompt = readFileSync(promptPath, "utf8").replaceAll("__RESUME_FROM_VERSION__", version);
     writeFileSync(promptPath, prompt);
   }
