@@ -109,6 +109,9 @@ claude plugin marketplace add alexei-led/resume-from
 claude plugin install resume-from@alexei-led-resume-from
 ```
 
+Update with `claude plugin marketplace update alexei-led-resume-from`, then
+`claude plugin update resume-from@alexei-led-resume-from`.
+
 ### Codex
 
 ```sh
@@ -116,7 +119,8 @@ codex plugin marketplace add alexei-led/resume-from
 codex plugin add resume-from@alexei-led-resume-from
 ```
 
-The Codex prompt runs the matching published `resume-from` package through `npx`. Its first use needs
+In Codex, run the `resume-from` skill as `$resume-from <id>`. Claude Code and Codex run the matching
+published `resume-from` package through `npx`. The first use needs
 npm registry access.
 
 ## Run the first restore

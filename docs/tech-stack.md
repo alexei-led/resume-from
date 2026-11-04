@@ -30,8 +30,8 @@ which TypeScript 7 does not ship. Node type declarations stay on the Node 24 lin
 Vitest 5 runs the test suite; Biome and ESLint check source and configuration.
 
 The tokenizer uses the ESM `gpt-tokenizer/encoding/o200k_base` entry point. The
-Claude Code package bundles it with esbuild and includes its license notices;
-package smoke checks run the bundle outside the repository without `node_modules`.
+root package declares it as a dependency; the Claude Code and Codex plugins run that package
+through `npx` and bundle nothing.
 
 ## Delivery shape
 
@@ -39,8 +39,8 @@ Decided in the design (`src/module.md`, Decision 4) and recorded here because it
 build:
 
 - **One library**, wired by `src/host/`.
-- **One command binary** — `src/host/cli/`. The Codex prompt file and the Claude Code slash-command
-  file call it.
+- **One command binary** — `src/host/cli/`. The Codex skill file and the Claude Code slash-command
+  file call it through `npx`.
 - **One in-process extension** — `src/host/pi-extension/`. Pi loads it, so it must be importable as a
   module, not only executable as a binary.
 

@@ -39,16 +39,9 @@ const packages = [
       "LICENSE",
       ".claude-plugin/plugin.json",
       "commands/resume-from.md",
-      "dist/bin.js",
-      "THIRD-PARTY-NOTICES.md",
     ],
-    // Ships a self-contained esbuild bundle because Claude Code unpacks the tarball without
-    // installing dependencies, so the budget carries the whole gpt-tokenizer encoding table:
-    // 2,431,335 bytes for esm/bpeRanks/o200k_base.js in 4.0.0, 2,223,080 in 3.4.0, plus about
-    // 300 KB of own source and notices. Raise only for that table; a jump beyond it means
-    // something else was bundled in.
-    maxUnpackedBytes: 3_800_000,
-    forbidden: (path) => path.endsWith(".d.ts") || path.endsWith(".map"),
+    maxUnpackedBytes: 20_000,
+    forbidden: (path) => path.startsWith("dist/"),
   },
   {
     name: "@alexeiled/resume-from-codex",
@@ -137,22 +130,6 @@ function smokeTestRoot(tarball, directory) {
   });
 }
 
-/**
- * Runs the Claude binary the way Claude Code does: from an unpacked tarball with no node_modules
- * anywhere. `npm install` would resolve the dependencies and hide a bare import, which is exactly
- * how a missing gpt-tokenizer once reached the plugin cache. The extraction root must stay outside
- * the repository, or Node walks up to the repo's own node_modules and the check passes for free.
- */
-function smokeTestClaude(tarball, directory) {
-  const unpacked = resolve(directory, "claude-unpacked");
-  mkdirSync(unpacked);
-  execFileSync("tar", ["-xzf", tarball, "-C", unpacked], { stdio: "pipe" });
-  execFileSync(process.execPath, [resolve(unpacked, "package/dist/bin.js"), "--help"], {
-    cwd: unpacked,
-    stdio: "pipe",
-  });
-}
-
 function assertNoRawArgumentInterpolation(path) {
   const contents = readFileSync(path, "utf8");
   const unsafeLine = contents
@@ -178,7 +155,6 @@ try {
     if (spec.name === "@alexeiled/resume-from-claude") {
       requireMatchingField(manifest, "type", spec.name);
       requireMatchingField(manifest, "engines", spec.name);
-      requireMatchingField(manifest, "dependencies", spec.name);
     }
 
     const packed = packedPackage(spec.directory, temporaryRoot);
@@ -200,12 +176,8 @@ try {
   }
 
   const rootTarball = tarballs.get("resume-from");
-  const claudeTarball = tarballs.get("@alexeiled/resume-from-claude");
-  if (rootTarball === undefined || claudeTarball === undefined) {
-    throw new Error("runtime package tarballs were not created");
-  }
+  if (rootTarball === undefined) throw new Error("root package tarball was not created");
   smokeTestRoot(rootTarball, temporaryRoot);
-  smokeTestClaude(claudeTarball, temporaryRoot);
   console.log("isolated install and runtime smoke checks passed");
 } finally {
   rmSync(temporaryRoot, { recursive: true, force: true });
@@ -217,10 +189,18 @@ const claudeMarketplace = JSON.parse(
 const codexMarketplace = JSON.parse(
   readFileSync(resolve(repoRoot, ".agents/plugins/marketplace.json"), "utf8"),
 );
-for (const marketplace of [claudeMarketplace, codexMarketplace]) {
-  if (marketplace.version !== version || marketplace.plugins[0]?.source?.version !== version) {
-    throw new Error("Marketplace version does not match the packages.");
-  }
+const claudeEntry = claudeMarketplace.plugins[0];
+if (
+  claudeMarketplace.version !== version ||
+  claudeEntry?.version !== version ||
+  claudeEntry?.source?.source !== "git-subdir" ||
+  claudeEntry.source.path !== "shims/claude-code" ||
+  claudeEntry.source.ref !== `v${version}`
+) {
+  throw new Error("The Claude marketplace must pin the git-subdir source to this release tag.");
+}
+if (codexMarketplace.version !== version || codexMarketplace.plugins[0]?.source?.version !== version) {
+  throw new Error("Codex marketplace version does not match the packages.");
 }
 
 for (const [target, manifestPath] of [
@@ -235,8 +215,8 @@ const claudeCommand = readFileSync(
   resolve(repoRoot, "build/npm/claude/commands/resume-from.md"),
   "utf8",
 );
-if (!claudeCommand.includes("${CLAUDE_PLUGIN_ROOT}/dist/bin.js")) {
-  throw new Error("Claude command does not invoke its bundled CLI.");
+if (!claudeCommand.includes(`npx --yes resume-from@${version} --target-agent claude-code`)) {
+  throw new Error("Claude command does not pin the matching core CLI version.");
 }
 assertNoRawArgumentInterpolation(resolve(repoRoot, "build/npm/claude/commands/resume-from.md"));
 
@@ -277,11 +257,9 @@ for (const [contents, source] of [
   if (contents.includes("agtermctl")) throw new Error(`${source} still launches an agterm session.`);
 }
 
-// Claude bundles the runtime; Codex deliberately uses the version-pinned core package above.
-for (const runtime of ["build/npm/claude/dist/bin.js", "dist/import/preview/warnings.js"]) {
-  const contents = readFileSync(resolve(repoRoot, runtime), "utf8");
-  if (!contents.includes("The source session records a different directory")) {
-    throw new Error(`${runtime} is missing the worktree preview runtime.`);
-  }
+// Both plugins run the version-pinned core package, so the worktree preview ships with it.
+const previewRuntime = readFileSync(resolve(repoRoot, "dist/import/preview/warnings.js"), "utf8");
+if (!previewRuntime.includes("The source session records a different directory")) {
+  throw new Error("dist/import/preview/warnings.js is missing the worktree preview runtime.");
 }
 console.log("packaged instruction sources and worktree preview runtime checks passed");

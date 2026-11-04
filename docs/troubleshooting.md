@@ -71,9 +71,22 @@ resume-from --target-agent codex --
 Everything after `--` is the selection: a row number, session ID, or file path. A printed
 `Confirm:` line repeats this prefix, so it can be pasted into the same shell.
 
-## Codex cannot reach npm
+## `claude plugin update` fails with `EALLOWREMOTE`
 
-The Codex prompt uses a pinned package through `npx`. Make sure that the process can reach
+Version 0.5.3 and earlier installed from the npm registry. npm 12 refuses that download unless
+`allow-remote=all` is set. Version 0.5.4 and later install from git, so no npm setting is needed.
+Refresh the catalog first, then update:
+
+```sh
+claude plugin marketplace update alexei-led-resume-from
+claude plugin update resume-from@alexei-led-resume-from
+```
+
+Do not change `allow-remote` for this plugin.
+
+## Claude Code or Codex cannot reach npm
+
+The Claude Code command and the Codex skill use a pinned package through `npx`. Make sure that the process can reach
 `https://registry.npmjs.org`. If the network is restricted, install the core command once:
 
 ```sh
@@ -84,9 +97,10 @@ The npm cache can then satisfy the pinned `npx` command.
 
 ## The import is complete, but the agent did not switch
 
-Claude Code and Codex create a new native session but cannot switch the current process. Run the
-printed `Resume:` command from its directory with the same target profile. Pi switches in the current
-process when the destination is its cwd.
+Claude Code and Codex cannot switch the running process themselves. Type the printed
+`Resume in place:` command, for example `/resume <session-id>`, in the same session. Run the
+`Resume:` command only to open the session from another terminal. Pi switches in the current process.
+If Pi prints `Resume:`, the switch was declined or failed.
 
 ## The configuration file fails to load
 

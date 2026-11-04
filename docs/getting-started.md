@@ -19,7 +19,8 @@ claude plugin marketplace add alexei-led/resume-from
 claude plugin install resume-from@alexei-led-resume-from
 ```
 
-Restart Claude Code if `/resume-from` does not appear.
+Restart Claude Code if `/resume-from` does not appear. The command runs a pinned package through
+`npx`. Its first use needs access to the npm registry.
 
 ### Codex
 
@@ -28,7 +29,8 @@ codex plugin marketplace add alexei-led/resume-from
 codex plugin add resume-from@alexei-led-resume-from
 ```
 
-The Codex prompt uses a pinned package through `npx`. Its first use needs access to the npm registry.
+Run the Codex skill as `$resume-from <id>`. It uses a pinned package through `npx`. Its first use
+needs access to the npm registry.
 
 ## 2. Restore by ID
 

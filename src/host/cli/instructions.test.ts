@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
 
-const SHIMS = ["shims/claude-code/commands/resume-from.md", "shims/codex/skills/resume-from/SKILL.md"];
+const SHIMS = [
+  "shims/claude-code/commands/resume-from.md",
+  "shims/codex/skills/resume-from/SKILL.md",
+];
 
 test.each(SHIMS)("%s restores the session instead of only previewing it", async (path) => {
   const text = await readFile(new URL(`../../../${path}`, import.meta.url), "utf8");
@@ -34,12 +37,24 @@ test("the Claude command allows the tools the steps need", async () => {
     "utf8",
   );
   const allowed = /^allowed-tools: (.+)$/mu.exec(text)?.[1] ?? "";
-  for (const tool of ["node", "npx", "git"]) {
+  for (const tool of ["npx", "git"]) {
     expect(allowed).toContain(`Bash(${tool}`);
   }
-  for (const tool of ["agtermctl", "tmux"]) {
+  for (const tool of ["node", "agtermctl", "tmux"]) {
     expect(allowed).not.toContain(`Bash(${tool}`);
   }
+});
+
+test("the Claude command runs the core CLI pinned to the released version", async () => {
+  const text = await readFile(
+    new URL("../../../shims/claude-code/commands/resume-from.md", import.meta.url),
+    "utf8",
+  );
+  const manifest = JSON.parse(
+    await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+  expect(text).toContain(`npx --yes resume-from@${manifest.version} --target-agent claude-code --`);
+  expect(text).not.toContain("CLAUDE_PLUGIN_ROOT");
 });
 
 test("the Claude command preserves the target profile", async () => {
