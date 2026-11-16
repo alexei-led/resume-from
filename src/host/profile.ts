@@ -27,13 +27,19 @@ function resolveHome(home: HomePath): HomePath {
 
 export function createTargetProfileBuilder(registry: AgentRegistry): TargetProfileBuilder {
   return {
-    build(agent: AgentId, home: HomePath | null, config: ImportConfig): TargetProfile {
+    build(
+      agent: AgentId,
+      home: HomePath | null,
+      config: ImportConfig,
+      sessionDir?: HomePath,
+    ): TargetProfile {
       // Rejects an agent with no adapter, rather than guessing one (FR-56).
       const declared = registry.get(agent).capabilities();
       const override = config.windowOverrides.find((entry) => entry.agent === agent);
       return {
         agent,
         home: home === null ? declared.defaultHome : resolveHome(home),
+        ...(sessionDir === undefined ? {} : { sessionDir: resolve(sessionDir) }),
         windowTokens: override?.windowTokens ?? declared.defaultWindowTokens,
       };
     },

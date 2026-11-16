@@ -157,6 +157,8 @@ interface CanonicalSession {
 interface TargetProfile {
   agent: AgentId;
   home: HomePath;
+  /** Effective project session directory, when the host reports one. */
+  sessionDir?: HomePath;
   /** Context window of the target, in tokens. */
   windowTokens: number;
 }
@@ -373,7 +375,11 @@ interface AgentAdapter {
   /** Target role. Checks the structure before placement. Empty means valid (FR-50). */
   validate(serialized: SerializedSession): ValidationDefect[];
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
-  readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
+  readBack(
+    home: HomePath,
+    sessionId: SessionId,
+    filePath?: string | null,
+  ): Promise<StoredSessionFacts>;
 
   /**
    * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).

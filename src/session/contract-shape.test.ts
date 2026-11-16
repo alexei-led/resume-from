@@ -59,7 +59,7 @@ const CONTRACT_KEYS = {
   RepoSnapshot: ["commit", "branch", "changedPaths"],
   SourceProvenance: ["ref", "title", "startedAt", "updatedAt", "repo"],
   CanonicalSession: ["provenance", "turns"],
-  TargetProfile: ["agent", "home", "windowTokens"],
+  TargetProfile: ["agent", "home", "windowTokens", "sessionDir"],
   ProvenanceMarker: [
     "sourceAgent",
     "sourceHome",

@@ -193,6 +193,8 @@ interface CanonicalSession {
 interface TargetProfile {
   agent: AgentId;
   home: HomePath;
+  /** Effective project session directory, when the host reports one. */
+  sessionDir?: HomePath;
   /** Context window of the target, in tokens. */
   windowTokens: number;
 }
@@ -308,7 +310,7 @@ interface AgentAdapter {
   capabilities(): AgentCapabilities;
 
   /** Source role. Opens source files for reading only (FR-8, NG-1, AC-4). */
-  listSessions(home: HomePath): Promise<SessionDescriptor[]>;
+  listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 
@@ -317,7 +319,7 @@ interface AgentAdapter {
    * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
    * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(home?: HomePath): string[];
+  searchRoots(home?: HomePath, sessionDir?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
@@ -354,7 +356,11 @@ interface AgentAdapter {
   /** Target role. Checks the structure before placement. Empty means valid (FR-50). */
   validate(serialized: SerializedSession): ValidationDefect[];
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
-  readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
+  readBack(
+    home: HomePath,
+    sessionId: SessionId,
+    filePath?: string | null,
+  ): Promise<StoredSessionFacts>;
 
   /**
    * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).
@@ -464,6 +470,8 @@ type SelectionInput =
 ```ts
 /** Which homes to search (FR-2, FR-5, FR-13, FR-15). */
 interface SearchScope {
+  /** Active target, when its adapter reports an effective session directory. */
+  target?: TargetProfile;
   /** Absolute path of the repository the listing is filtered to (FR-13). */
   repoRoot: string;
   /** When set, only this agent is searched (FR-15). */
@@ -739,6 +747,8 @@ interface ImportRequest {
 
 /** How the user named one session to restore (FR-61). */
 interface LocateRequest {
+  /** Active target, when its adapter reports an effective session directory. */
+  target?: TargetProfile;
   selection: SelectionInput;
   /** The invocation directory, used only to resolve a row of this repository's list. */
   cwd: string;

@@ -121,7 +121,7 @@ export interface AgentAdapter {
   capabilities(): AgentCapabilities;
 
   /** Source role. Opens source files for reading only (FR-8, NG-1, AC-4). */
-  listSessions(home: HomePath): Promise<SessionDescriptor[]>;
+  listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 
@@ -130,7 +130,7 @@ export interface AgentAdapter {
    * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
    * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(home?: HomePath): string[];
+  searchRoots(home?: HomePath, sessionDir?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
@@ -167,7 +167,11 @@ export interface AgentAdapter {
   /** Target role. Checks the structure before placement. Empty means valid (FR-50). */
   validate(serialized: SerializedSession): ValidationDefect[];
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
-  readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
+  readBack(
+    home: HomePath,
+    sessionId: SessionId,
+    filePath?: string | null,
+  ): Promise<StoredSessionFacts>;
 
   /**
    * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).

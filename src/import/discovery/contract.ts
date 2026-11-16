@@ -38,6 +38,7 @@ import type {
   SessionId,
   SessionRef,
   SourceProvenance,
+  TargetProfile,
   ToolCallRecord,
   ToolEffect,
   TurnKind,
@@ -54,6 +55,7 @@ export type {
   SessionId,
   SessionRef,
   SourceProvenance,
+  TargetProfile,
   ToolCallRecord,
   ToolEffect,
   TurnKind,
@@ -68,6 +70,8 @@ export type SelectionInput =
 
 /** Which homes to search (FR-2, FR-5, FR-13, FR-15). */
 export interface SearchScope {
+  /** Active target, when its adapter reports an effective session directory. */
+  target?: TargetProfile;
   /** Absolute path of the repository the listing is filtered to (FR-13). */
   repoRoot: string;
   /** When set, only this agent is searched (FR-15). */
@@ -117,6 +121,7 @@ export interface SessionLocator {
     query: string,
     accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
     home?: HomePath | null,
+    target?: TargetProfile,
   ): Promise<SessionDescriptor>;
   /** Describes one session file directly (FR-12). */
   byPath(

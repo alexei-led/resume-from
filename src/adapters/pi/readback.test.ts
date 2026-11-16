@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { REFERENCE_SESSION } from "../../../test/fixtures/reference-session.js";
 import { createPiAdapter } from "./adapter.js";
@@ -62,6 +62,25 @@ describe("T-PI-8 — read-back reports what Pi holds", () => {
     expect(facts.sessionId).toBe(serialized.sessionId);
     expect(facts.itemCount).toBe(serialized.itemCount);
     expect(facts.openable).toBe(true);
+  });
+
+  it("reads a committed file outside the home-derived session directory", async () => {
+    const home = throwawayHome();
+    const serialized = createPiAdapter().serialize(
+      REFERENCE_SESSION,
+      { ...target(home), sessionDir: join(home, "sessions-work", "custom-project") },
+      markerFixture(),
+      { cwd: CWD },
+    );
+    commit(serialized.files);
+    const filePath = serialized.files[0]?.absolutePath ?? "";
+
+    expect(dirname(filePath)).toBe(join(home, "sessions-work", "custom-project"));
+    const adapter = createPiAdapter();
+    expect((await adapter.readBack(home, serialized.sessionId, filePath)).openable).toBe(true);
+    expect((await adapter.listSessions(home, dirname(filePath))).map((row) => row.ref.id)).toEqual([
+      serialized.sessionId,
+    ]);
   });
 
   it("reports a session that was never committed as absent, so FR-52 can catch it", async () => {

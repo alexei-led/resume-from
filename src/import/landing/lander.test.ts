@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, rmdir, unlink, writeFile } from 
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createFileCommitter } from "../../platform/store/file-committer.js";
 import type {
   AgentAdapter,
   AgentCapabilities,
@@ -99,6 +100,8 @@ interface SerializeArgs {
 
 interface AdapterStub extends AgentAdapter {
   serializeArgs: SerializeArgs | null;
+  readBackFilePath: string | null;
+  switchFilePath: string | null;
   /** Not part of AgentAdapter. Recorded so FR-46 can be asserted (T-LAN-19). */
   sendMessage(): void;
   runTool(): void;
@@ -118,6 +121,7 @@ interface AdapterOptions {
   defects?: ValidationDefect[];
   switchOutcome?: SwitchOutcome;
   serializeThrows?: Error;
+  serializedFilePath?: string;
   validateThrows?: Error;
   readBackRejects?: Error;
   switchRejects?: Error;
@@ -147,6 +151,8 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
 
   const stub: AdapterStub = {
     serializeArgs: null,
+    readBackFilePath: null,
+    switchFilePath: null,
     prompt: "",
     capabilities(): AgentCapabilities {
       log.push("capabilities");
@@ -186,7 +192,10 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
       if (options.serializeThrows) throw options.serializeThrows;
       return {
         sessionId,
-        files: filesFor(target.home, sessionId, options.fileCount ?? 1),
+        files:
+          options.serializedFilePath === undefined
+            ? filesFor(target.home, sessionId, options.fileCount ?? 1)
+            : [{ absolutePath: options.serializedFilePath, bytes: Buffer.from("{}\n") }],
         itemCount,
       };
     },
@@ -195,7 +204,12 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
       if (options.validateThrows) throw options.validateThrows;
       return options.defects ?? [];
     },
-    readBack(_home: HomePath, _sessionId: SessionId): Promise<StoredSessionFacts> {
+    readBack(
+      _home: HomePath,
+      _sessionId: SessionId,
+      filePath?: string | null,
+    ): Promise<StoredSessionFacts> {
+      stub.readBackFilePath = filePath ?? null;
       log.push("readBack");
       if (options.readBackRejects) return Promise.reject(options.readBackRejects);
       return Promise.resolve({
@@ -204,7 +218,13 @@ function createAdapter(log: string[], options: AdapterOptions = {}): AdapterStub
         openable: options.openable ?? true,
       });
     },
-    switchTo(_home: HomePath, _sessionId: SessionId, _runtime: unknown): Promise<SwitchOutcome> {
+    switchTo(
+      _home: HomePath,
+      _sessionId: SessionId,
+      _runtime: unknown,
+      filePath?: string | null,
+    ): Promise<SwitchOutcome> {
+      stub.switchFilePath = filePath ?? null;
       log.push("switchTo");
       if (options.switchRejects) return Promise.reject(options.switchRejects);
       return Promise.resolve(options.switchOutcome ?? { switched: true, cancelled: false });
@@ -366,6 +386,41 @@ describe("unit", () => {
       expect(log.filter((call) => call === stage)).toHaveLength(1);
     }
     expect(result.switched).toBe(true);
+  });
+
+  it("commits to an effective session directory outside the profile home", async () => {
+    const profileHome = join(home, "profile");
+    const sessionDir = join(home, "shared-pi");
+    const target = makePlan(profileHome).target;
+    const adapter = createAdapter([], { serializedFilePath: join(sessionDir, "landed.jsonl") });
+    const result = await createSessionLander().land(
+      makePlan(profileHome, { target: { ...target, sessionDir } }),
+      adapter,
+      createFileCommitter(),
+      RUNTIME,
+      IMPORTED_AT,
+      { cwd: "/repo" },
+    );
+
+    expect(result.switched).toBe(true);
+    expect(existsSync(join(sessionDir, "landed.jsonl"))).toBe(true);
+    expect(adapter.readBackFilePath).toBe(join(sessionDir, "landed.jsonl"));
+    expect(adapter.switchFilePath).toBe(join(sessionDir, "landed.jsonl"));
+  });
+
+  it("keeps the home root when an adapter ignores an unrelated session directory", async () => {
+    const target = makePlan(home).target;
+    const result = await createSessionLander().land(
+      makePlan(home, { target: { ...target, sessionDir: join(home, "unrelated") } }),
+      createAdapter([]),
+      createFileCommitter(),
+      RUNTIME,
+      IMPORTED_AT,
+      { cwd: "/repo" },
+    );
+
+    expect(result.switched).toBe(true);
+    expect(existsSync(join(home, "sessions", SESSION_ID, "part-0.jsonl"))).toBe(true);
   });
 
   it("T-LAN-2 builds a marker carrying every fact FR-47 requires", async () => {

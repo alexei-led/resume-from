@@ -234,20 +234,23 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       };
     },
 
-    async listSessions(home: HomePath): Promise<SessionDescriptor[]> {
+    async listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]> {
       const descriptors: SessionDescriptor[] = [];
       // Whole-file read and full parse per file: title, turn count, and updatedAt all require
       // parsing the entire JSONL (FR-11). Same approach as the claude-code adapter (not
       // separately benchmarked for Pi files); revisit if a home with thousands of sessions
       // makes the listing noticeably slow to users.
-      for (const filePath of await sessionFilesIn(home)) {
+      for (const filePath of await (sessionDir === undefined
+        ? sessionFilesIn(home)
+        : sessionFilesInRoot(sessionDir))) {
         const descriptor = await describeFileOnDisk(home, filePath);
         if (descriptor !== null) descriptors.push(descriptor);
       }
       return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     },
 
-    searchRoots(home?: HomePath): string[] {
+    searchRoots(home?: HomePath, sessionDir?: HomePath): string[] {
+      if (sessionDir !== undefined) return [sessionDir];
       // A named home may hold `sessions`, `sessions-work`, or another `*sessions*` directory.
       return home === undefined ? piSearchRoots() : [join(home, "*sessions*")];
     },
@@ -314,8 +317,12 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       return validateSerialized(serialized);
     },
 
-    async readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts> {
-      const filePath = await findSessionFile(home, sessionId);
+    async readBack(
+      home: HomePath,
+      sessionId: SessionId,
+      givenFile?: string | null,
+    ): Promise<StoredSessionFacts> {
+      const filePath = givenFile ?? (await findSessionFile(home, sessionId));
       if (!filePath) return { sessionId, itemCount: 0, openable: false };
       let parsed: ReturnType<typeof parseSessionText>;
       try {

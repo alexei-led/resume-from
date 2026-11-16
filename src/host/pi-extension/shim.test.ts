@@ -17,6 +17,7 @@ type ShimFactory = (pi: {
 type OuterCommandContext = {
   cwd: string;
   hasUI: boolean;
+  sessionManager: { getSessionDir(): string };
   ui: {
     notify(message: string, level: string): void;
     confirm(title: string, question: string): Promise<boolean>;
@@ -28,10 +29,25 @@ type OuterCommandContext = {
 type OuterCommandHandler = (rawArgs: string, context: OuterCommandContext) => Promise<void>;
 type MockPiActivation = {
   home: string | null;
+  sessionDir?: string;
   registrar: {
     registerCommand(definition: { name: string; description: string; run: unknown }): void;
   };
 };
+
+function outerContext(sessionDir: string): OuterCommandContext {
+  return {
+    cwd: "/repo",
+    hasUI: true,
+    sessionManager: { getSessionDir: () => sessionDir },
+    ui: {
+      notify: vi.fn(),
+      confirm: vi.fn().mockResolvedValue(true),
+      select: vi.fn().mockResolvedValue(undefined),
+    },
+    switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
+  };
+}
 
 async function loadOuterCommand(): Promise<OuterCommandHandler> {
   const shimUrl = new URL("../../../shims/pi/extensions/resume-from.js", import.meta.url).href;
@@ -113,7 +129,7 @@ describe("Pi package shim provenance", () => {
 });
 
 describe("Pi package shim command boundary", () => {
-  it("lets the host resolve the home, and preserves a path containing spaces as one argument", async () => {
+  it("lets the host resolve an arbitrary session directory, and preserves a path containing spaces", async () => {
     const run = vi.fn().mockResolvedValue(undefined);
     const resolvedHome = "/resolved/pi-agent";
     activatePiExtension.mockImplementation(async (deps: MockPiActivation) => {
@@ -126,23 +142,41 @@ describe("Pi package shim command boundary", () => {
     });
 
     const handler = await loadOuterCommand();
-    const context: OuterCommandContext = {
-      cwd: "/repo",
-      hasUI: true,
-      ui: {
-        notify: vi.fn(),
-        confirm: vi.fn().mockResolvedValue(true),
-        select: vi.fn().mockResolvedValue(undefined),
-      },
-      switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
-    };
-
-    await handler(" 'sessions/my session.jsonl' ", context);
+    await handler(" 'sessions/my session.jsonl' ", outerContext("/tmp/shared-pi"));
 
     const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
     expect(activation?.home).toBeNull();
+    expect(activation?.sessionDir).toBe("/tmp/shared-pi");
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]?.[0].home).toBe(resolvedHome);
     expect(run.mock.calls[0]?.[1]).toEqual(["sessions/my session.jsonl"]);
   });
+
+  it.each(["sessions", "sessions-work"])(
+    "targets the agent home above an effective %s project directory",
+    async (sessionsDirectory) => {
+      const run = vi.fn().mockResolvedValue(undefined);
+      activatePiExtension.mockImplementation(async (deps: MockPiActivation) => {
+        deps.registrar.registerCommand({
+          name: "resume-from",
+          description: "test",
+          run,
+        });
+        return { home: deps.home ?? "/default/pi-agent" };
+      });
+
+      const handler = await loadOuterCommand();
+      await handler(
+        "",
+        outerContext(`/profiles/pi-work/${sessionsDirectory}/--Users-me-Workspace-app--`),
+      );
+
+      const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
+      expect(activation?.home).toBe("/profiles/pi-work");
+      expect(activation?.sessionDir).toBe(
+        `/profiles/pi-work/${sessionsDirectory}/--Users-me-Workspace-app--`,
+      );
+      expect(run.mock.calls[0]?.[0].home).toBe("/profiles/pi-work");
+    },
+  );
 });

@@ -93,6 +93,7 @@ function scopeOf(request: ListRequest | ImportRequest): SearchScope {
     repoRoot: request.destinationCwd,
     onlyAgent: request.onlyAgent,
     onlyHome: request.onlyHome,
+    ...(request.target === null ? {} : { target: request.target }),
   };
 }
 
@@ -364,7 +365,7 @@ export function createPipelineFromStages(stages: PipelineStages): ImportPipeline
         return home === null || (await canonicalPath(descriptor.ref.home)) === home;
       };
       return request.selection.by === "session-id"
-        ? await stages.locator.byId(request.selection.id, accept, home)
+        ? await stages.locator.byId(request.selection.id, accept, home, request.target)
         : await stages.locator.byPath(request.selection.path, accept);
     },
 

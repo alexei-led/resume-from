@@ -23,6 +23,7 @@ The target-agent guide owns installation and landing instructions. The shared ge
 
 ## Releases
 
+- [v0.5.5](releases/v0.5.5.md) — Pi imports preserve custom session directories.
 - [v0.5.4](releases/v0.5.4.md) — Claude Code plugin updates without npm settings; Codex command works as a skill.
 - [v0.5.3](releases/v0.5.3.md) — resume in place in Claude Code, Codex and Pi.
 - [v0.5.2](releases/v0.5.2.md) — Claude Code imports ignore your own files beside sessions.

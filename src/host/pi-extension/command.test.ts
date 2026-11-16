@@ -317,6 +317,7 @@ function deps(over: Partial<ResumeFromDeps> & { picker: SessionPicker; ui: PiUi 
     picker: over.picker,
     ui: over.ui,
     windowTokens: over.windowTokens ?? PI_WINDOW,
+    ...(over.sessionDir === undefined ? {} : { sessionDir: over.sessionDir }),
   };
 }
 
@@ -330,13 +331,12 @@ describe("T-PIX-1 — no argument opens the picker", () => {
     const ui = stubUi();
     const { ctx } = stubContext();
 
-    await createResumeFromCommand(deps({ picker: picked.picker, ui: ui.ui })).run(
-      ctx,
-      [],
-      pipeline.pipeline,
-    );
+    await createResumeFromCommand(
+      deps({ picker: picked.picker, ui: ui.ui, sessionDir: "/work/pi/sessions-work/project" }),
+    ).run(ctx, [], pipeline.pipeline);
 
     expect(pipeline.listCalls).toHaveLength(1);
+    expect(pipeline.listCalls[0]?.target?.sessionDir).toBe("/work/pi/sessions-work/project");
     expect(picked.calls).toEqual([listing(rows)]);
   });
 });

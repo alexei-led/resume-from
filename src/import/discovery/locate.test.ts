@@ -74,6 +74,23 @@ describe("byId", () => {
     expect((await locator.byId("ARCHFIT-FEEDBACK")).ref.id).toBe(custom);
   });
 
+  it("searches the effective directory reported by the active target", async () => {
+    const { piRoot } = await scene();
+    const sessionDir = await makeDir(root, "shared-pi");
+    await writeSession(sessionDir, { id: V7, updatedAt: "2026-05-01T08:00:00Z", repoPath: null });
+    const locator = createSessionLocator({
+      adapters: [makeStubAdapter({ agent: "pi", defaultHome: piRoot, roots: [piRoot] })],
+    });
+
+    const found = await locator.byId(V7, undefined, null, {
+      agent: "pi",
+      home: piRoot,
+      windowTokens: 200_000,
+      sessionDir,
+    });
+    expect(found.filePath).toBe(join(sessionDir, `${V7}.json`));
+  });
+
   it("lists every candidate when the query is ambiguous", async () => {
     const { claudeRoot, codexRoot } = await scene();
     await writeSession(claudeRoot, {

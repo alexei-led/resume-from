@@ -224,7 +224,7 @@ interface AgentAdapter {
   capabilities(): AgentCapabilities;
 
   /** Source role. Opens source files for reading only (FR-8, NG-1, AC-4). */
-  listSessions(home: HomePath): Promise<SessionDescriptor[]>;
+  listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 
@@ -233,7 +233,7 @@ interface AgentAdapter {
    * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
    * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(home?: HomePath): string[];
+  searchRoots(home?: HomePath, sessionDir?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
@@ -307,6 +307,8 @@ type SelectionInput =
 ```ts
 /** Which homes to search (FR-2, FR-5, FR-13, FR-15). */
 interface SearchScope {
+  /** Active target, when its adapter reports an effective session directory. */
+  target?: TargetProfile;
   /** Absolute path of the repository the listing is filtered to (FR-13). */
   repoRoot: string;
   /** When set, only this agent is searched (FR-15). */
@@ -381,6 +383,7 @@ interface SessionLocator {
     query: string,
     accept?: (descriptor: SessionDescriptor) => boolean | Promise<boolean>,
     home?: HomePath | null,
+    target?: TargetProfile,
   ): Promise<SessionDescriptor>;
   /** Describes one session file directly (FR-12). */
   byPath(

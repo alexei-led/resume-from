@@ -1,3 +1,4 @@
+import { sep } from "node:path";
 import type {
   AgentAdapter,
   AgentRuntime,
@@ -135,9 +136,13 @@ async function runLanding(
     );
   }
 
+  const filePath = serialized.files[0]?.absolutePath ?? "";
   let createdPaths: string[];
   try {
-    ({ createdPaths } = await committer.commit(home, serialized.files));
+    const sessionDir = plan.target.sessionDir;
+    const commitRoot =
+      sessionDir !== undefined && filePath.startsWith(sessionDir + sep) ? sessionDir : home;
+    ({ createdPaths } = await committer.commit(commitRoot, serialized.files));
   } catch (cause) {
     const refused = asCommitError(cause);
     const where = refused?.path ? ` (path: ${refused.path})` : "";
@@ -150,7 +155,7 @@ async function runLanding(
 
   let stored: StoredSessionFacts;
   try {
-    stored = await adapter.readBack(home, serialized.sessionId);
+    stored = await adapter.readBack(home, serialized.sessionId, filePath);
   } catch (cause) {
     throw failAfterCommit(
       createdPaths,
@@ -191,7 +196,6 @@ async function runLanding(
     itemsStored: stored.itemCount,
     marker,
   };
-  const filePath = serialized.files[0]?.absolutePath ?? "";
   // The adapter owns its own resume command, so the landing prints a runnable one (FR-45).
   const handover = (): HandoverInstruction => ({
     sessionId: serialized.sessionId,
@@ -212,7 +216,7 @@ async function runLanding(
 
   let outcome: SwitchOutcome;
   try {
-    outcome = await adapter.switchTo(home, serialized.sessionId, runtime);
+    outcome = await adapter.switchTo(home, serialized.sessionId, runtime, filePath);
   } catch (cause) {
     // The session is valid, so it is kept: destroying it would destroy work.
     throw new LandingFailure(
