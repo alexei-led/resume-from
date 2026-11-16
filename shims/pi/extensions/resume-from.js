@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { activatePiExtension } from "resume-from";
 import { formatRow, safeLines, safeText } from "resume-from/pi-extension";
@@ -109,7 +111,8 @@ export default function resumeFrom(pi) {
         registrar: { registerCommand: (definition) => (command = definition) },
         ui: uiFor(context),
         picker: pickerFor(context),
-        home: null,
+        home: getAgentDir(),
+        sessionDir: resolve(context.sessionManager.getSessionDir()),
         cwd: context.cwd,
       });
 

@@ -6,6 +6,7 @@
  * already reads, so no test ever opens the user's own sessions (C-3).
  */
 
+import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createFixtureAgentAdapter,
@@ -179,6 +180,56 @@ describe("T-HOS-18 — adding an agent costs one folder and one line", () => {
     },
     60_000,
   );
+});
+
+describe("Pi effective session directory", () => {
+  let scene: Bench;
+
+  beforeAll(async () => {
+    scene = await bench();
+  }, 60_000);
+
+  afterAll(async () => {
+    scene?.guard.restore();
+    await cleanupTempDirs();
+  });
+
+  it("lands, switches and lists the import in the supplied directory", async () => {
+    const targetHome = join(scene.root, "pi-work");
+    const sessionDir = join(targetHome, "sessions-work", "custom-project");
+    const target = scene.host.profiles().build("pi", targetHome, scene.host.config(), sessionDir);
+    const pipeline = await scene.host.pipelineFor(target);
+    const request = {
+      destinationCwd: REPO_ROOT,
+      target,
+      selection: { by: "session-id" as const, id: scene.seeded.get("claude-code") ?? "" },
+      onlyAgent: "claude-code" as const,
+      onlyHome: scene.homes.get("claude-code") ?? null,
+    };
+    const report = await pipeline.preview(request);
+    let switchedPath = "";
+    const runtime = {
+      cwd: REPO_ROOT,
+      home: targetHome,
+      switchSession(path: string, options: { withSession: () => void }) {
+        switchedPath = path;
+        options.withSession();
+        return Promise.resolve({ cancelled: false });
+      },
+    };
+
+    const landed = await pipeline.commit(request, runtime, report.confirmationToken);
+
+    expect(dirname(switchedPath)).toBe(sessionDir);
+    expect(landed.switched).toBe(true);
+    const listed = await pipeline.list({
+      destinationCwd: REPO_ROOT,
+      target,
+      onlyAgent: "pi",
+      onlyHome: targetHome,
+    });
+    expect(listed.rows.map((row) => row.ref.id)).toContain(landed.ref.id);
+  });
 });
 
 describe("T-HOS-19 — the profile is right for every agent", () => {

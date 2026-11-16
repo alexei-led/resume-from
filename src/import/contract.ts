@@ -173,6 +173,8 @@ export interface ImportRequest {
 
 /** How the user named one session to restore (FR-61). */
 export interface LocateRequest {
+  /** Active target, when its adapter reports an effective session directory. */
+  target?: TargetProfile;
   selection: SelectionInput;
   /** The invocation directory, used only to resolve a row of this repository's list. */
   cwd: string;

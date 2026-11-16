@@ -23,6 +23,8 @@ export type SourceAdapter = Pick<
 /** One home to search, with the adapter that can read it. */
 export interface SearchTarget {
   agent: AgentId;
+  /** Effective directory for the active target home, when supplied by the host. */
+  sessionDir?: HomePath;
   /** Resolved absolute path. */
   home: HomePath;
   adapter: SourceAdapter;
@@ -90,6 +92,9 @@ export async function buildSearchList(
   }
 
   const onlyHome = scope.onlyHome === null ? null : await canonicalPath(scope.onlyHome);
+  const targetHome = scope.target === undefined ? null : await canonicalPath(scope.target.home);
+  const effectiveSessionDir = (agent: AgentId, home: HomePath): HomePath | undefined =>
+    scope.target?.agent === agent && targetHome === home ? scope.target.sessionDir : undefined;
   const seen = new Set<string>();
   const targets: SearchTarget[] = [];
   for (const candidate of candidates) {
@@ -99,7 +104,13 @@ export async function buildSearchList(
     const key = `${candidate.agent}\u0000${home}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    targets.push({ agent: candidate.agent, home, adapter: candidate.adapter });
+    const sessionDir = effectiveSessionDir(candidate.agent, home);
+    targets.push({
+      agent: candidate.agent,
+      home,
+      adapter: candidate.adapter,
+      ...(sessionDir === undefined ? {} : { sessionDir }),
+    });
   }
 
   // FR-2 names a home, not a filter: a home outside the defaults and extraHomes would
@@ -108,7 +119,14 @@ export async function buildSearchList(
   if (onlyHome !== null && targets.length === 0) {
     for (const [agent, adapter] of sources) {
       if (scope.onlyAgent !== null && agent !== scope.onlyAgent) continue;
-      targets.push({ agent, home: onlyHome, adapter, named: true });
+      const sessionDir = effectiveSessionDir(agent, onlyHome);
+      targets.push({
+        agent,
+        home: onlyHome,
+        adapter,
+        named: true,
+        ...(sessionDir === undefined ? {} : { sessionDir }),
+      });
     }
   }
   return targets;

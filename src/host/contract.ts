@@ -182,5 +182,10 @@ export interface TargetProfileBuilder {
    * Uses the adapter's declared default home when home is null (FR-3),
    * and the user's window override when there is one (FR-18).
    */
-  build(agent: AgentId, home: HomePath | null, config: ImportConfig): TargetProfile;
+  build(
+    agent: AgentId,
+    home: HomePath | null,
+    config: ImportConfig,
+    sessionDir?: HomePath,
+  ): TargetProfile;
 }

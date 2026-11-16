@@ -182,6 +182,8 @@ interface CanonicalSession {
 interface TargetProfile {
   agent: AgentId;
   home: HomePath;
+  /** Effective project session directory, when the host reports one. */
+  sessionDir?: HomePath;
   /** Context window of the target, in tokens. */
   windowTokens: number;
 }

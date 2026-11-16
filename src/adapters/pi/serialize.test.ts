@@ -12,7 +12,7 @@ import {
   piUserDraft,
   writeFixtureSession,
 } from "./fixtures.js";
-import { MARKER_CUSTOM_TYPE, PI_SESSION_VERSION, sessionDirFor } from "./format.js";
+import { encodeCwd, MARKER_CUSTOM_TYPE, PI_SESSION_VERSION, sessionDirFor } from "./format.js";
 
 const homes: string[] = [];
 
@@ -43,8 +43,13 @@ function fixedAdapter() {
   });
 }
 
-function target(home: string): TargetProfile {
-  return { agent: "pi", home, windowTokens: 200_000 };
+function target(home: string, sessionDir?: string): TargetProfile {
+  return {
+    agent: "pi",
+    home,
+    windowTokens: 200_000,
+    ...(sessionDir === undefined ? {} : { sessionDir }),
+  };
 }
 
 describe("T-PI-4 — serialization produces a header and one entry per turn", () => {
@@ -60,6 +65,17 @@ describe("T-PI-4 — serialization produces a header and one entry per turn", ()
     expect(dirname(file?.absolutePath ?? "")).toBe(sessionDirFor(home, CWD));
     expect(basename(file?.absolutePath ?? "")).toContain(serialized.sessionId);
     expect(basename(file?.absolutePath ?? "").endsWith(".jsonl")).toBe(true);
+  });
+
+  it("writes to the effective session directory when the host supplies one", () => {
+    const sessionDir = `${home}/sessions-work/${encodeCwd(CWD)}`;
+    const custom = fixedAdapter().serialize(
+      REFERENCE_SESSION,
+      target(home, sessionDir),
+      markerFixture(),
+      { cwd: CWD },
+    );
+    expect(dirname(custom.files[0]?.absolutePath ?? "")).toBe(sessionDir);
   });
 
   it("starts with a session header", () => {

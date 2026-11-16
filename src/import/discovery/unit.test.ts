@@ -70,6 +70,22 @@ it("T-DIS-1 — the search list is the defaults plus the extras", async () => {
   expect([...searched].sort()).toEqual([...defaults, ...extras].sort());
 });
 
+it("lists the effective directory of the active target home", async () => {
+  const home = await makeDir(root, "pi-home");
+  const sessionDir = await makeDir(root, "shared-pi");
+  await writeSession(sessionDir, { id: "custom-dir", repoPath: repoA, updatedAt: "2026-01-01" });
+  const adapter = makeStubAdapter({ agent: "pi", defaultHome: home });
+
+  const listing = await finderOf([adapter]).list(
+    scopeFor(repoA, {
+      target: { agent: "pi", home, windowTokens: 200_000, sessionDir },
+    }),
+  );
+
+  expect(listing.rows.map((row) => row.ref.id)).toEqual(["custom-dir"]);
+  expect(adapter.calls).toEqual([sessionDir]);
+});
+
 const duplicateCases = [
   { name: "the same absolute path", spell: (home: string) => home },
   {

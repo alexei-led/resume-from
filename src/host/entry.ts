@@ -106,6 +106,8 @@ export interface PiActivation {
   keys?: KeySource;
   /** The home the agent is running, or null to use the adapter's declared default (FR-3). */
   home: HomePath | null;
+  /** Effective project session directory reported by Pi. */
+  sessionDir?: HomePath;
   /** The directory the agent is running in. Used to find the repository (FR-13). */
   cwd?: string;
 }
@@ -133,7 +135,9 @@ export async function activatePiExtension(
     );
   }
 
-  const target = host.profiles().build(activation.agent, activation.home, host.config());
+  const target = host
+    .profiles()
+    .build(activation.agent, activation.home, host.config(), activation.sessionDir);
   const pipeline = await host.pipelineFor(target);
 
   registerResumeFrom(activation.registrar, {
@@ -142,6 +146,7 @@ export async function activatePiExtension(
     ui: activation.ui,
     // The extension holds no capability knowledge, so the window comes from here (FR-18).
     windowTokens: target.windowTokens,
+    ...(target.sessionDir === undefined ? {} : { sessionDir: target.sessionDir }),
   });
   return target;
 }

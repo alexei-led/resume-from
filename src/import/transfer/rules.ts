@@ -240,6 +240,7 @@ function apply(
     target: {
       agent: target.agent,
       home: target.home,
+      ...(target.sessionDir === undefined ? {} : { sessionDir: target.sessionDir }),
       windowTokens: target.windowTokens,
     },
     provenance: copyProvenance(

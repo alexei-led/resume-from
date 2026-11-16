@@ -126,7 +126,10 @@ export function serializeSession(
 
   const lines = [header, ...entries].map((entry) => JSON.stringify(entry));
   const file: PendingFile = {
-    absolutePath: join(sessionDirFor(target.home, cwd), sessionFileName(createdAt, sessionId)),
+    absolutePath: join(
+      target.sessionDir ?? sessionDirFor(target.home, cwd),
+      sessionFileName(createdAt, sessionId),
+    ),
     bytes: Buffer.from(`${lines.join("\n")}\n`, "utf8"),
   };
 

@@ -197,7 +197,7 @@ export function createSessionFinder(deps: DiscoveryDeps): SessionFinder {
     let found: SessionDescriptor[];
     try {
       deps.repo.checkCancellation();
-      found = await target.adapter.listSessions(target.home);
+      found = await target.adapter.listSessions(target.home, target.sessionDir);
       deps.repo.checkCancellation();
     } catch (reason) {
       deps.repo.checkCancellation();

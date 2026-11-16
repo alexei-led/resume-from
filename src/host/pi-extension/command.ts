@@ -45,6 +45,8 @@ export interface ResumeFromDeps {
    * from the composition root that builds the command.
    */
   windowTokens: number;
+  /** Effective project session directory reported by the host, when present. */
+  sessionDir?: string;
 }
 
 /** Builds the /resume-from command. `run` is the only path to the switch (C-10). */
@@ -95,7 +97,13 @@ async function restore(
   pipeline: ImportPipeline,
 ): Promise<void> {
   const descriptor = await withDiagnostic(deps.ui, () =>
-    pipeline.locate({ selection, cwd: ctx.cwd, onlyAgent: null, onlyHome: null }),
+    pipeline.locate({
+      target: targetOf(deps, ctx),
+      selection,
+      cwd: ctx.cwd,
+      onlyAgent: null,
+      onlyHome: null,
+    }),
   );
   if (descriptor === null) return;
 
@@ -287,7 +295,12 @@ async function withDiagnostic<T>(ui: PiUi, operation: () => Promise<T>): Promise
 
 /** The import target is always the Pi home the user is in (FR-1, FR-2). */
 function targetOf(deps: ResumeFromDeps, ctx: PiCommandContext): TargetProfile {
-  return { agent: "pi", home: ctx.home, windowTokens: deps.windowTokens };
+  return {
+    agent: "pi",
+    home: ctx.home,
+    windowTokens: deps.windowTokens,
+    ...(deps.sessionDir === undefined ? {} : { sessionDir: deps.sessionDir }),
+  };
 }
 
 /** The selection, or null when the user cancelled or there was nothing to pick. */

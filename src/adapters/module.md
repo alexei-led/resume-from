@@ -186,6 +186,8 @@ interface CanonicalSession {
 interface TargetProfile {
   agent: AgentId;
   home: HomePath;
+  /** Effective project session directory, when the host reports one. */
+  sessionDir?: HomePath;
   /** Context window of the target, in tokens. */
   windowTokens: number;
 }
@@ -307,7 +309,7 @@ interface AgentAdapter {
   capabilities(): AgentCapabilities;
 
   /** Source role. Opens source files for reading only (FR-8, NG-1, AC-4). */
-  listSessions(home: HomePath): Promise<SessionDescriptor[]>;
+  listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Reads one session into the neutral vocabulary. Drops every result body. */
   loadSession(descriptor: SessionDescriptor): Promise<CanonicalSession>;
 
@@ -316,12 +318,16 @@ interface AgentAdapter {
    * homes named by its environment. A global lookup expands them (FR-61). With `home`, the
    * roots inside that one home, for `--home` even when it is outside the configuration (FR-2).
    */
-  searchRoots(home?: HomePath): string[];
+  searchRoots(home?: HomePath, sessionDir?: HomePath): string[];
   /**
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
    */
-  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
+  findSessions(
+    root: string,
+    query: string,
+    home?: HomePath,
+  ): Promise<SessionDescriptor[]>;
   /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
   describeSession(filePath: string): Promise<SessionDescriptor>;
 
@@ -353,7 +359,11 @@ interface AgentAdapter {
   /** Target role. Checks the structure before placement. Empty means valid (FR-50). */
   validate(serialized: SerializedSession): ValidationDefect[];
   /** Target role. Reads the committed session back, to compare item counts (FR-51, FR-52). */
-  readBack(home: HomePath, sessionId: SessionId): Promise<StoredSessionFacts>;
+  readBack(
+    home: HomePath,
+    sessionId: SessionId,
+    filePath?: string | null,
+  ): Promise<StoredSessionFacts>;
 
   /**
    * Target role, only when capabilities().landing is "create-and-switch" (FR-43, FR-44).
@@ -429,7 +439,8 @@ list and picks.
 4. `serialize(session, target, marker, context)` — once, on the target adapter, after the rules have run and
    the user has confirmed.
 5. `validate(serialized)` — immediately after, before any byte reaches the disk (FR-50).
-6. `readBack(home, sessionId)` — after the commit, to compare item counts (FR-52).
+6. `readBack(home, sessionId, filePath)` — after the commit, to compare item counts (FR-52). The
+   host supplies the exact committed file so a custom session directory needs no re-discovery.
 7. `switchTo(home, sessionId, runtime)` — only when `capabilities().landing` is `"create-and-switch"`
    (FR-43).
 

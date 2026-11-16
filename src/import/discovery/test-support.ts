@@ -105,8 +105,12 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
   return {
     calls,
     capabilities,
-    searchRoots: (home?: string) =>
-      home === undefined ? (options.roots ?? [options.defaultHome]) : [home],
+    searchRoots: (home?: string, sessionDir?: string) =>
+      sessionDir === undefined
+        ? home === undefined
+          ? (options.roots ?? [options.defaultHome])
+          : [home]
+        : [sessionDir],
     async findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
       calls.push(root);
       const names = (await readdir(root).catch(() => [])).filter((n) => n.endsWith(".json"));
@@ -121,12 +125,13 @@ export function makeStubAdapter(options: StubAdapterOptions): StubAdapter {
     describeSession(filePath: string): Promise<SessionDescriptor> {
       return describeFile(options.defaultHome, filePath);
     },
-    async listSessions(home: HomePath): Promise<SessionDescriptor[]> {
-      calls.push(home);
-      const names = (await readdir(home)).filter((n) => n.endsWith(".json")).sort();
+    async listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]> {
+      const directory = sessionDir ?? home;
+      calls.push(directory);
+      const names = (await readdir(directory)).filter((n) => n.endsWith(".json")).sort();
       const rows: SessionDescriptor[] = [];
       for (const name of names) {
-        const filePath = path.join(home, name);
+        const filePath = path.join(directory, name);
         // A corrupt file rejects the whole listing of this home, as a real reader would.
         rows.push(await describeFile(home, filePath));
       }

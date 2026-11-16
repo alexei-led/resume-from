@@ -132,6 +132,12 @@ describe("the target profile", () => {
     expect(profile.home).toBe(resolve("./sessions"));
   });
 
+  it("resolves an effective session directory independently of the home", () => {
+    const profile = builder().build(agent, null, testConfig(), "./sessions-work/project");
+    expect(profile.sessionDir).toBe(resolve("./sessions-work/project"));
+    expect(profile.home).toBe(DECLARED_HOME);
+  });
+
   it("T-HOS-6 — an absolute home is kept as it is", () => {
     const profile = builder().build(agent, resolve("/srv/homes/team"), testConfig());
     expect(profile.home).toBe(resolve("/srv/homes/team"));

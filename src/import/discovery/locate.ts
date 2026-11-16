@@ -4,7 +4,7 @@
 
 import { glob, stat } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
-import type { ImportConfig, SessionDescriptor, SessionLocator } from "./contract.js";
+import type { ImportConfig, SessionDescriptor, SessionLocator, TargetProfile } from "./contract.js";
 import { SessionSelectionError } from "./errors.js";
 import { canonicalPath, expandHome, isDirectory, type SourceAdapter } from "./homes.js";
 import { compareDescriptors } from "./ordering.js";
@@ -24,6 +24,8 @@ function idShape(query: string): IdShape {
 interface RootSearch {
   adapter: SourceAdapter;
   root: string;
+  /** Known home when the root is the active target's effective directory. */
+  home?: string;
 }
 
 interface FoundSession {
@@ -40,8 +42,9 @@ async function expandRoots(
   adapters: readonly SourceAdapter[],
   home: string | null = null,
   extraHomes: ImportConfig["extraHomes"] = [],
+  target?: TargetProfile,
 ): Promise<RootSearch[]> {
-  const seen = new Set<string>();
+  const seen = new Map<string, RootSearch>();
   const found: RootSearch[] = [];
   for (const adapter of adapters) {
     const agent = adapter.capabilities().agent;
@@ -51,8 +54,14 @@ async function expandRoots(
             .filter((entry) => entry.agent === agent)
             .flatMap((entry) => adapter.searchRoots(entry.home))
         : [];
+    const effective =
+      home === null && target?.agent === agent && target.sessionDir !== undefined
+        ? adapter.searchRoots(undefined, target.sessionDir)
+        : [];
     const patterns =
-      home === null ? [...adapter.searchRoots(), ...extra] : adapter.searchRoots(home);
+      home === null
+        ? [...adapter.searchRoots(), ...extra, ...effective]
+        : adapter.searchRoots(home);
     for (const pattern of patterns) {
       let matches: string[];
       try {
@@ -66,9 +75,15 @@ async function expandRoots(
       for (const match of matches) {
         if (!(await isDirectory(match))) continue;
         const root = await canonicalPath(match);
-        if (seen.has(root)) continue;
-        seen.add(root);
-        found.push({ adapter, root });
+        const home = effective.includes(pattern) ? target?.home : undefined;
+        const known = seen.get(root);
+        if (known !== undefined) {
+          if (home !== undefined) known.home = home;
+          continue;
+        }
+        const entry = { adapter, root, ...(home === undefined ? {} : { home }) };
+        seen.set(root, entry);
+        found.push(entry);
       }
     }
   }
@@ -166,11 +181,16 @@ const acceptAll: Accept = () => true;
 
 /** Finds one session anywhere. It lists nothing it was not asked for and never writes. */
 export function createSessionLocator(deps: LocatorDeps): SessionLocator {
-  async function sourcesFor(query: string, home: string | null): Promise<RootSearch[]> {
+  async function sourcesFor(
+    query: string,
+    home: string | null,
+    target?: TargetProfile,
+  ): Promise<RootSearch[]> {
     return await expandRoots(
       rankedSources(deps.adapters, query),
       home,
       deps.config?.extraHomes ?? [],
+      target,
     );
   }
 
@@ -179,14 +199,15 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       query: string,
       accept: Accept = acceptAll,
       home: string | null = null,
+      target?: TargetProfile,
     ): Promise<SessionDescriptor> {
       const wanted = query.trim();
-      const roots = await sourcesFor(wanted, home);
+      const roots = await sourcesFor(wanted, home, target);
       const found: FoundSession[] = [];
       for (const entry of roots) {
         let rows: SessionDescriptor[];
         try {
-          rows = await entry.adapter.findSessions(entry.root, wanted);
+          rows = await entry.adapter.findSessions(entry.root, wanted, entry.home);
         } catch {
           // A root that grew unreadable after expansion is skipped, never fatal.
           continue;
