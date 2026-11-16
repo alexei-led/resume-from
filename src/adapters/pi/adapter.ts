@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
 import { sessionIdMatches } from "../id-match.js";
 import { describeFileOnDisk as describeSessionFile } from "../session-file.js";
@@ -155,20 +155,29 @@ function describe(
 async function describeFileOnDisk(
   home: HomePath,
   filePath: string,
+  requireHeader = false,
 ): Promise<SessionDescriptor | null> {
-  return await describeSessionFile(filePath, (text, modified) =>
-    describe(home, filePath, parseSessionText(text), modified),
-  );
+  return await describeSessionFile(filePath, (text, modified) => {
+    const parsed = parseSessionText(text);
+    if (requireHeader && parsed.header === null) {
+      throw new Error(`not a Pi session file: ${filePath}`);
+    }
+    return describe(home, filePath, parsed, modified);
+  });
 }
 
 /** Sessions of one session directory whose ID matches the query (FR-61). */
-async function findPiSessions(root: string, query: string): Promise<SessionDescriptor[]> {
-  const home = homeOfSessionsRoot(root);
+async function findPiSessions(
+  root: string,
+  query: string,
+  givenHome?: HomePath,
+): Promise<SessionDescriptor[]> {
+  const home = givenHome ?? homeOfSessionsRoot(root);
   const descriptors: SessionDescriptor[] = [];
   for (const filePath of await sessionFilesInRoot(root)) {
     const id = sessionIdFromFileName(basename(filePath));
     if (id === null || !sessionIdMatches(id, query)) continue;
-    const descriptor = await describeFileOnDisk(home, filePath);
+    const descriptor = await describeFileOnDisk(home, filePath, true);
     if (descriptor !== null) descriptors.push(descriptor);
   }
   return descriptors.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -235,14 +244,20 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
     },
 
     async listSessions(home: HomePath, sessionDir?: HomePath): Promise<SessionDescriptor[]> {
+      const filePaths = [
+        ...(await sessionFilesIn(home)),
+        ...(sessionDir === undefined ? [] : await sessionFilesInRoot(sessionDir)),
+      ];
+      const seenFiles = new Set<string>();
       const descriptors: SessionDescriptor[] = [];
       // Whole-file read and full parse per file: title, turn count, and updatedAt all require
       // parsing the entire JSONL (FR-11). Same approach as the claude-code adapter (not
       // separately benchmarked for Pi files); revisit if a home with thousands of sessions
       // makes the listing noticeably slow to users.
-      for (const filePath of await (sessionDir === undefined
-        ? sessionFilesIn(home)
-        : sessionFilesInRoot(sessionDir))) {
+      for (const filePath of filePaths) {
+        const canonical = await realpath(filePath).catch(() => filePath);
+        if (seenFiles.has(canonical)) continue;
+        seenFiles.add(canonical);
         const descriptor = await describeFileOnDisk(home, filePath);
         if (descriptor !== null) descriptors.push(descriptor);
       }
@@ -255,8 +270,8 @@ export function createPiAdapter(overrides: Partial<PiAdapterDeps> = {}): AgentAd
       return home === undefined ? piSearchRoots() : [join(home, "*sessions*")];
     },
 
-    findSessions(root: string, query: string): Promise<SessionDescriptor[]> {
-      return findPiSessions(root, query);
+    findSessions(root: string, query: string, home?: HomePath): Promise<SessionDescriptor[]> {
+      return findPiSessions(root, query, home);
     },
 
     describeSession(filePath: string): Promise<SessionDescriptor> {

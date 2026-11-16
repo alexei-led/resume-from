@@ -24,6 +24,8 @@ function idShape(query: string): IdShape {
 interface RootSearch {
   adapter: SourceAdapter;
   root: string;
+  /** Known home when the root is the active target's effective directory. */
+  home?: string;
 }
 
 interface FoundSession {
@@ -42,7 +44,7 @@ async function expandRoots(
   extraHomes: ImportConfig["extraHomes"] = [],
   target?: TargetProfile,
 ): Promise<RootSearch[]> {
-  const seen = new Set<string>();
+  const seen = new Map<string, RootSearch>();
   const found: RootSearch[] = [];
   for (const adapter of adapters) {
     const agent = adapter.capabilities().agent;
@@ -73,9 +75,15 @@ async function expandRoots(
       for (const match of matches) {
         if (!(await isDirectory(match))) continue;
         const root = await canonicalPath(match);
-        if (seen.has(root)) continue;
-        seen.add(root);
-        found.push({ adapter, root });
+        const home = effective.includes(pattern) ? target?.home : undefined;
+        const known = seen.get(root);
+        if (known !== undefined) {
+          if (home !== undefined) known.home = home;
+          continue;
+        }
+        const entry = { adapter, root, ...(home === undefined ? {} : { home }) };
+        seen.set(root, entry);
+        found.push(entry);
       }
     }
   }
@@ -199,7 +207,7 @@ export function createSessionLocator(deps: LocatorDeps): SessionLocator {
       for (const entry of roots) {
         let rows: SessionDescriptor[];
         try {
-          rows = await entry.adapter.findSessions(entry.root, wanted);
+          rows = await entry.adapter.findSessions(entry.root, wanted, entry.home);
         } catch {
           // A root that grew unreadable after expansion is skipped, never fatal.
           continue;

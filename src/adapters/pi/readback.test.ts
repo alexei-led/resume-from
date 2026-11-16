@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { REFERENCE_SESSION } from "../../../test/fixtures/reference-session.js";
@@ -72,15 +72,32 @@ describe("T-PI-8 — read-back reports what Pi holds", () => {
       markerFixture(),
       { cwd: CWD },
     );
-    commit(serialized.files);
+    const homeSerialized = serializeInto(home);
+    commit([...serialized.files, ...homeSerialized.files]);
     const filePath = serialized.files[0]?.absolutePath ?? "";
 
     expect(dirname(filePath)).toBe(join(home, "sessions-work", "custom-project"));
     const adapter = createPiAdapter();
     expect((await adapter.readBack(home, serialized.sessionId, filePath)).openable).toBe(true);
-    expect((await adapter.listSessions(home, dirname(filePath))).map((row) => row.ref.id)).toEqual([
-      serialized.sessionId,
+    expect((await adapter.listSessions(home, dirname(filePath))).map((row) => row.ref.id)).toEqual(
+      expect.arrayContaining([serialized.sessionId, homeSerialized.sessionId]),
+    );
+    expect(
+      (await adapter.findSessions(dirname(filePath), serialized.sessionId, home))[0]?.ref.home,
+    ).toBe(home);
+
+    const alias = join(home, "aliased-session-dir");
+    symlinkSync(dirname(homeSerialized.files[0]?.absolutePath ?? ""), alias, "dir");
+    expect((await adapter.listSessions(home, alias)).map((row) => row.ref.id)).toEqual([
+      homeSerialized.sessionId,
     ]);
+
+    const foreignId = "foreign-session";
+    writeFileSync(
+      join(dirname(filePath), `2026-08-02T10-00-00-000Z_${foreignId}.jsonl`),
+      `{"message":"not a Pi session"}\n`,
+    );
+    expect(await adapter.findSessions(dirname(filePath), foreignId, home)).toEqual([]);
   });
 
   it("reports a session that was never committed as absent, so FR-52 can catch it", async () => {

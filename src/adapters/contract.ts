@@ -135,7 +135,7 @@ export interface AgentAdapter {
    * Source role. Sessions under one search root whose ID matches `query`. Only matching files
    * are parsed, never every file of a home.
    */
-  findSessions(root: string, query: string): Promise<SessionDescriptor[]>;
+  findSessions(root: string, query: string, home?: HomePath): Promise<SessionDescriptor[]>;
   /** Source role. Describes one session file directly, for selection by path (FR-12, FR-61). */
   describeSession(filePath: string): Promise<SessionDescriptor>;
 

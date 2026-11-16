@@ -1,4 +1,5 @@
-import { basename, dirname, resolve } from "node:path";
+import { resolve } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { activatePiExtension } from "resume-from";
 import { formatRow, safeLines, safeText } from "resume-from/pi-extension";
@@ -96,19 +97,6 @@ function pickerFor(context) {
   };
 }
 
-function targetHome(sessionDir) {
-  const resolvedSessionDir = resolve(sessionDir);
-  const sessionsDirectory = basename(dirname(resolvedSessionDir));
-  const projectDirectory = basename(resolvedSessionDir);
-  if (
-    (sessionsDirectory === "sessions" || sessionsDirectory === "sessions-work") &&
-    /^--.*--$/.test(projectDirectory)
-  ) {
-    return dirname(dirname(resolvedSessionDir));
-  }
-  return null;
-}
-
 export default function resumeFrom(pi) {
   // Provenance is already persisted as a custom entry. Render it in the transcript,
   // not as a widget, so it scrolls away and never occupies the footer/editor area.
@@ -123,7 +111,7 @@ export default function resumeFrom(pi) {
         registrar: { registerCommand: (definition) => (command = definition) },
         ui: uiFor(context),
         picker: pickerFor(context),
-        home: targetHome(context.sessionManager.getSessionDir()),
+        home: getAgentDir(),
         sessionDir: resolve(context.sessionManager.getSessionDir()),
         cwd: context.cwd,
       });

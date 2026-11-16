@@ -1,8 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const activatePiExtension = vi.hoisted(() => vi.fn());
+const getAgentDir = vi.hoisted(() =>
+  vi.fn(() => process.env.PI_CODING_AGENT_DIR ?? "/default/pi-agent"),
+);
 
 vi.mock("resume-from", () => ({ activatePiExtension }));
+vi.mock("@earendil-works/pi-coding-agent", () => ({ getAgentDir }));
+
+afterEach(() => vi.unstubAllEnvs());
 
 type EntryRenderer = (
   entry: { data?: unknown },
@@ -145,16 +151,37 @@ describe("Pi package shim command boundary", () => {
     await handler(" 'sessions/my session.jsonl' ", outerContext("/tmp/shared-pi"));
 
     const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
-    expect(activation?.home).toBeNull();
+    expect(activation?.home).toBe("/default/pi-agent");
     expect(activation?.sessionDir).toBe("/tmp/shared-pi");
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]?.[0].home).toBe(resolvedHome);
     expect(run.mock.calls[0]?.[1]).toEqual(["sessions/my session.jsonl"]);
   });
 
+  it("uses the configured Pi home for an override under another profile-shaped path", async () => {
+    vi.stubEnv("PI_CODING_AGENT_DIR", "/profiles/actual-pi-home");
+    activatePiExtension.mockImplementation(async (deps: MockPiActivation) => {
+      deps.registrar.registerCommand({
+        name: "resume-from",
+        description: "test",
+        run: vi.fn(),
+      });
+      return { home: deps.home ?? "/default/pi-agent" };
+    });
+    const sessionDir = "/outside/sessions-work/--Users-me-Workspace-app--";
+
+    const handler = await loadOuterCommand();
+    await handler("", outerContext(sessionDir));
+
+    const activation = activatePiExtension.mock.calls.at(-1)?.[0] as MockPiActivation | undefined;
+    expect(activation?.home).toBe("/profiles/actual-pi-home");
+    expect(activation?.sessionDir).toBe(sessionDir);
+  });
+
   it.each(["sessions", "sessions-work"])(
     "targets the agent home above an effective %s project directory",
     async (sessionsDirectory) => {
+      vi.stubEnv("PI_CODING_AGENT_DIR", "/profiles/pi-work");
       const run = vi.fn().mockResolvedValue(undefined);
       activatePiExtension.mockImplementation(async (deps: MockPiActivation) => {
         deps.registrar.registerCommand({
